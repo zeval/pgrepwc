@@ -1,11 +1,11 @@
 import sys, getopt, os
 from math import ceil
+import re
 
-
-# # Cor
-# CRED = '\033[91m'
-# CEND = '\033[0m'
-# os.system('color')
+# Cor
+CRED = '\033[91m'
+CEND = '\033[0m'
+os.system('color')
 
 
 def main(argv):
@@ -60,6 +60,8 @@ def matchFinder(files, args, word):
 
     wc = 0
     lc = 0
+
+    regex = fr"\b{word}\b"
     
     for file in files:
         # se -p omitido ou 0
@@ -77,9 +79,16 @@ def matchFinder(files, args, word):
 
                     
                     print(lineIndex+1,lines[lineIndex])
-                    #print(lineIndex+1, lines[lineIndex].replace(" " + word + " ", f"{CRED} {word} {CEND}"))
-                    
-                    #print(lineIndex+1, lines[lineIndex].replace(word, f"{CRED}{word}{CEND}")) #TODO: Fix wrong matches being highlighted
+            
+            for lineIndex in range(len(lines)):
+                line = lines[lineIndex]
+                matches = re.findall(regex, line)
+                if matches:
+                    lc += 1
+                    wc += len(matches)
+
+                    processedLine = re.sub(regex, CRED + word + CEND, line) #replace matches with colored versions
+                    print(f"{lineIndex+1}: {processedLine}")
 
     return wc, lc
 
