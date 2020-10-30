@@ -8,6 +8,8 @@ CEND = '\033[0m'
 os.system('color')
 
 
+
+
 def main(argv):
 
     try:
@@ -26,11 +28,17 @@ def main(argv):
     totalLC = 0
     numberOfProcesses = 1
 
-    allFiles = args[1:]
+    if len(args) == 1: #Se apenas for dada a palavra, e não os nomes dos ficheiros
+        print("Introduza os nomes dos ficheiros a pesquisar, numa linha, separados por espaços:")
+        allFiles = input().split()
+    else:
+        allFiles = args[1:]
 
     for opt in opts:
         if opt[0] == "-p":
             numberOfProcesses = opt[1]
+
+#TODO: A partir da linha ~40, onde se decide o número de ficheiros por processo, falta iterar sobre o número de processos, senão estamos apenas a dar todos os ficheiros ao mesmo processo
 
     numberOfFilesPerProcess = ceil(len(allFiles)/numberOfProcesses)
 
@@ -40,11 +48,12 @@ def main(argv):
 
         for i in range(numberOfFilesPerProcess):
 
-            if i >= len(allFiles)-1:
-                filesToHandle.append(allFiles.pop(i))
+            if len(allFiles) >= 1:
+                filesToHandle.append(allFiles.pop(0))
 
 
         wc, lc = matchFinder(filesToHandle, args, args[0])
+        print()
         totalWC += wc
         totalLC += lc
 
