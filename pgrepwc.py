@@ -36,9 +36,12 @@ def main(argv):
 
     for opt in opts:
         if opt[0] == "-p":
-            numberOfProcesses = opt[1]
+            numberOfProcesses = int(opt[1])
 
-#TODO: A partir da linha ~40, onde se decide o número de ficheiros por processo, falta iterar sobre o número de processos, senão estamos apenas a dar todos os ficheiros ao mesmo processo
+    #TODO: A partir da linha ~40, onde se decide o número de ficheiros por processo, falta iterar sobre o número de processos, senão estamos apenas a dar todos os ficheiros ao mesmo processo
+    #TODO: Falta também arranjar maneira de depois partilhar os dados dos processos filhos para o pai, suspeito que no manual do multiprocessing.Process() haja uma maneira simples, senão usa-se
+    # um tuplo (wc, lc) dentro de um array partilhado ou algo do género. Para a versão alterna de threads (outro ficheiro), totalWC e totalLC já são variáveis onde se pode por diretamente o valor
+    # de matches ou linhas a incrementar.
 
     numberOfFilesPerProcess = ceil(len(allFiles)/numberOfProcesses)
 
@@ -53,11 +56,13 @@ def main(argv):
 
 
         wc, lc = matchFinder(filesToHandle, args, args[0])
-        print()
+        
         totalWC += wc
         totalLC += lc
 
 
+
+    print() #estético
     if any("-c" in opt for opt in opts):
         print(f"Total de ocorrências: {totalWC}")
 
