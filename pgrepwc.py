@@ -40,7 +40,7 @@ def main(argv):
 
         for i in range(numberOfFilesPerProcess):
 
-            if i => len(allFiles)-1:
+            if i >= len(allFiles)-1:
                 filesToHandle.append(allFiles.pop(i))
 
 
