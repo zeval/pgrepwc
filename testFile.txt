@@ -13,5 +13,5 @@ sdf
 a
 da
 sf
-abcdefg
-abcdefg yoooo linha abcdefg de teste wassup
+abcdefg!
+abcdefg. yoooo linha abcdefg de teabcdefgste wassup

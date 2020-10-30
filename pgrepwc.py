@@ -24,13 +24,13 @@ def main(argv):
 
     totalWC = 0
     totalLC = 0
+    numberOfProcesses = 1
+
+    allFiles = args[1:]
 
     for opt in opts:
         if opt[0] == "-p":
             numberOfProcesses = opt[1]
-
-    allFiles = args[1:]
-
 
     numberOfFilesPerProcess = ceil(len(allFiles)/numberOfProcesses)
 
@@ -39,23 +39,21 @@ def main(argv):
         filesToHandle = []
 
         for i in range(numberOfFilesPerProcess):
-            
+
             if i > len(allFiles)-1:
                 filesToHandle.append(allFiles.pop(i))
-        
+
 
         wc, lc = matchFinder(filesToHandle, args, args[0])
         totalWC += wc
         totalLC += lc
-    
+
 
     if any("-c" in opt for opt in opts):
         print(f"Total de ocorrências: {totalWC}")
 
     if any("-l" in opt for opt in opts):
         print(f"Total de linhas: {totalLC}")
-
-
 
 
 def matchFinder(files, args, word):
