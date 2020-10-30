@@ -67,18 +67,9 @@ def matchFinder(files, args, word):
         # se -p omitido ou 0
         with open(file, "r") as f:
 
-            print(f"\nFicheiro: {file}\n")
+            print(f"PID: {os.getpid()}\nFicheiro: {file}\n")
 
             lines = f.readlines()
-
-            for lineIndex in range(len(lines)):
-                splitLine = lines[lineIndex].strip("\n").split()
-                if word in splitLine: #para que não apareçam palavras pegadas a outras
-                    lc += 1
-                    wc += splitLine.count(word)
-
-                    
-                    print(lineIndex+1,lines[lineIndex])
             
             for lineIndex in range(len(lines)):
                 line = lines[lineIndex]
