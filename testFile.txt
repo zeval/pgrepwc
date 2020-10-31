@@ -15,3 +15,6 @@ da
 sf
 abcdefg!
 abcdefg. yoooo linha abcdefg de teabcdefgste wassup
+
+Total de ocorrências: 3
+Total de linhas: 2
