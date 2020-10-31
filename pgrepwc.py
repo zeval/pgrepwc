@@ -26,6 +26,7 @@ def main(argv):
         sys.exit(2)
 
     # Por omissão, todas as pesquisas/contagens são feitas no processo pai, pelo que não se dá paralelização
+    numberOfProcesses = 1
     parallelization = False
 
     if len(args) == 1: # Caso apenas seja dada a palavra, e não os nomes dos ficheiros
