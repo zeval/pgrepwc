@@ -81,6 +81,7 @@ def main(argv):
         matchFinder(allFiles, args, args[0], parallelization)
 
     print()  # estético
+    print(f"Thread PAI: {current_thread().ident}\n")
 
     if any("-c" in opt for opt in opts):
         print(f"Total de ocorrências: {totalWC}")
