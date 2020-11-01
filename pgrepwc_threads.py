@@ -1,27 +1,31 @@
-import sys, getopt, os, re
-from math import ceil
+import sys
+import os
+import re
+import getopt
+import platform
 from threading import Thread, current_thread
+from math import ceil
 
 # Constante/Definição de cor
 RED_START = '\033[91m'
 GREEN_START = '\033[92m'
 COLOR_END = '\033[0m'
-os.system('color')
+if platform.system() == "Windows":
+    os.system('color')
 
-
-#TODO: Encontrar maneira de dar uma mensagem mais bonita caso o ficheiro não seja encontrado em vez de simplesmente crashar
-#TODO: Quando um ficheiro é pesquisado/contado, espera-se até que este processo termine para começar outro. Apesar das várias
-#pesquisas se darem em vários processos, estas não acontecem ao mesmo tempo com um for. Será ainda paralelização?
-#TODO: O que quererá dizer "apresentar resultados de forma não intercalada"?
-
+# Definição de variáveis globais
 totalWC = 0
 totalLC = 0
+
+
+# TODO: Mutex lock
+
 
 def main(argv):
 
     try:
         # Obter argumentos, opções
-        opts, args = getopt.getopt(argv,"clp:")
+        opts, args = getopt.getopt(argv, "clp:")
 
     except getopt.GetoptError:
         # Mensagem de ajuda caso o comando seja malformado
@@ -32,26 +36,22 @@ def main(argv):
     numberOfThreads = 1
     parallelization = False
 
-    if len(args) == 1: # Caso apenas seja dada a palavra, e não os nomes dos ficheiros
+    if len(args) == 1:  # Caso apenas seja dada a palavra, e não os nomes dos ficheiros
         print("Introduza os nomes dos ficheiros a pesquisar, numa linha, separados por espaços:")
-        allFiles = removeDuplicates(input().split()) # Evitar pesquisar nos mesmos ficheiros várias vezes
-        print() # Razões Estéticas
+        allFiles = removeDuplicates(input().split())  # Evitar pesquisar nos mesmos ficheiros várias vezes
+        print()  # Razões Estéticas
     else:
-        allFiles = removeDuplicates(args[1:]) # Evitar pesquisar nos mesmos ficheiros várias vezes
-
+        allFiles = removeDuplicates(args[1:])  # Evitar pesquisar nos mesmos ficheiros várias vezes
 
     for opt in opts:
         if opt[0] == "-p":
             numberOfThreads = int(opt[1])
-            parallelization = True # Ativar paralelização caso a opção "-p n" seja utilizada
-            if numberOfThreads == 0: # Evitar erros se for pedido "-p 0", desligando a paralelização
+            parallelization = True  # Ativar paralelização caso a opção "-p n" seja utilizada
+            if numberOfThreads == 0:  # Evitar erros se for pedido "-p 0", desligando a paralelização
                 parallelization = False
 
-
-    if numberOfThreads > len(allFiles): # Evitar ciclos do for desnecessários, utilizar no máximo tantas
-        numberOfThreads = len(allFiles) # threads como ficheiros referidos
-
-
+    if numberOfThreads > len(allFiles):  # Evitar ciclos do for desnecessários, utilizar no máximo tantas
+        numberOfThreads = len(allFiles)  # threads como ficheiros referidos
 
     if parallelization:
 
@@ -76,13 +76,11 @@ def main(argv):
             thread.start()
         for thread in t:
             thread.join()
-    else: # Caso a paralelização esteja desligada, todo o trabalho é feito sem threading
-        
+
+    else:  # Caso a paralelização esteja desligada, todo o trabalho é feito sem threading
         matchFinder(allFiles, args, args[0], parallelization)
 
-
-
-    print() #estético
+    print()  # estético
 
     if any("-c" in opt for opt in opts):
         print(f"Total de ocorrências: {totalWC}")
@@ -103,45 +101,46 @@ def matchFinder(files, args, word, parallelization):
         output = []
         wc = 0
         lc = 0
+        try:
+            with open(file, "r", encoding="utf-8") as f:
+                print(f"=========================")
+                if parallelization:
+                    output.append(f"Thread ID: {current_thread().ident}")
+                output.append(f"Ficheiro: {file}\n")
 
-        with open(file, "r", encoding="utf-8") as f:
+                lineNumber = 0
 
-            print(f"=========================")
-            if parallelization:
-                output.append(f"Thread ID: {current_thread().ident}")
-            output.append(f"Ficheiro: {file}\n")
+                # lines = f.readlines()
 
-            lineNumber = 0
+                # for lineIndex in range(len(lines)):
+                for line in f:
+                    lineNumber += 1
+                    matches = re.findall(regex, line)
+                    if matches:
+                        lc += 1
+                        wc += len(matches)
 
-            # lines = f.readlines()
-            
-            # for lineIndex in range(len(lines)):
-            for line in f:
-                lineNumber += 1
-                matches = re.findall(regex, line)
-                if matches:
-                    lc += 1
-                    wc += len(matches)
+                        # Uso do método re.sub() para substituir todas as instâncias da palavra isolada
+                        # por instâncias da mesma em versão colorida
+                        processedLine = re.sub(regex, RED_START + word + COLOR_END, line)
+                        output.append(f"{GREEN_START}{lineNumber}{COLOR_END}: {processedLine}")
 
-                    # Uso do método re.sub() para substituir todas as instâncias da palavra isolada 
-                    # por instâncias da mesma em versão colorida
-                    processedLine = re.sub(regex, RED_START + word + COLOR_END, line)
-                    output.append(f"{GREEN_START}{lineNumber}{COLOR_END}: {processedLine}")
+                for line in output:
+                    print(line)
 
-            for line in output:
-                print(line)
+                print()
+                for opt in args:
+                    if opt[0] == "-c":
+                        print(f"Total de ocorrências da palavra: {wc}.\nA enviar para o processo pai...")
+                    if opt[0] == "-l":
+                        print(f"Total de linhas em que a palavra apareceu: {lc}.\nA enviar para o processo pai...")
+                print(f"=========================\n")
 
-            print()
-            for opt in args:
-                if opt[0] == "-c":
-                    print(f"Total de ocorrências da palavra: {wc}. A enviar para o processo pai...")
-                if opt[0] == "-l":
-                    print(f"Total de linhas em que a palavra apareceu: {lc}. A enviar para o processo pai...")
-            print(f"=========================\n")
+                totalWC += wc
+                totalLC += lc
+        except FileNotFoundError:
+            print(f"Ficheiro '{file}' não encontrado. Verifique o seu input.")
 
-
-            totalWC += wc
-            totalLC += lc
 
 def removeDuplicates(inputList):
     """
@@ -151,5 +150,6 @@ def removeDuplicates(inputList):
     """
     return list(dict.fromkeys(inputList))          
 
+
 if __name__ == "__main__":
-   main(sys.argv[1:])
+    main(sys.argv[1:])
