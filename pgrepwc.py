@@ -84,8 +84,6 @@ def main(argv):
 
         matchFinder(allFiles, opts, args[0], totalWC, totalLC)
 
-    print()  # estético
-    
     if parallelization:
         print(f"PID PAI: {os.getpid()}")
 
@@ -137,9 +135,11 @@ def matchFinder(files, args, word, totalWC, totalLC, mutex=None):
                 print()
                 for opt in args:
                     if opt[0] == "-c":
-                        print(f"Total de ocorrências da palavra: {wc}\nA enviar para o processo pai...")
+                        print(f"Total de ocorrências da palavra: {wc}\n"
+                              f"A enviar para o processo pai ({os.getppid()})...")
                     if opt[0] == "-l":
-                        print(f"Total de linhas em que a palavra apareceu: {lc}\nA enviar para o processo pai...")
+                        print(f"Total de linhas em que a palavra apareceu: {lc}\n"
+                              f"A enviar para o processo pai ({os.getppid()})...")
                 print(f"==================================================\n")
 
             # Incrementação nas variáveis de contagem em memória partilhada

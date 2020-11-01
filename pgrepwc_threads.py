@@ -85,8 +85,7 @@ def main(argv):
     else:  # Caso a paralelização esteja desligada, todo o trabalho é feito sem threading
         matchFinder(allFiles, opts, args[0], parallelization)
 
-    print()  # estético
-    print(f"Processo Pai: {current_thread().ident}\n")
+    print(f"Processo Pai: {os.getpid()}")
 
     if any("-c" in opt for opt in opts):
         print(f"Total de ocorrências: {totalWC}")
@@ -140,9 +139,11 @@ def matchFinder(files, args, word, parallelization, mutex=None):
                 print()
                 for opt in args:
                     if opt[0] == "-c":
-                        print(f"Total de ocorrências da palavra: {wc}\nA enviar para o processo pai...\n")
+                        print(f"Total de ocorrências da palavra: {wc}\n"
+                              f"A enviar para o processo pai...")
                     if opt[0] == "-l":
-                        print(f"Total de linhas em que a palavra apareceu: {lc}\nA enviar para o processo pai...\n")
+                        print(f"Total de linhas em que a palavra apareceu: {lc}\n"
+                              f"A enviar para o processo pai...")
                 print(f"==================================================\n")
                 totalWC += wc
                 totalLC += lc
