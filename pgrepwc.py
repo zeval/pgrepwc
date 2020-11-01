@@ -4,7 +4,7 @@ import os
 import re
 import platform
 from math import ceil
-from multiprocessing import Value, Process
+from multiprocessing import Value, Process, Lock
 
 # Constante/Definição de cor
 RED_START = '\033[91m'
@@ -12,8 +12,6 @@ GREEN_START = '\033[92m'
 COLOR_END = '\033[0m'
 if platform.system() == "Windows":
     os.system('color')
-
-# TODO: Mutex lock
 
 
 def main(argv):
@@ -55,7 +53,12 @@ def main(argv):
 
         # Definição do número estimado de ficheiros a lidar por cada processo
         numberOfFilesPerProcess = ceil(len(allFiles) / numberOfProcesses)
+
+        # Definição de lista de processos a executar
         p = []
+
+        # Definição de um mutex para evitar problemas de sincronização / outputs intercalados
+        mutex = Lock()
 
         # Divisão do trabalho pelos vários processos
         for process in range(numberOfProcesses):
@@ -68,7 +71,9 @@ def main(argv):
                     if len(allFiles) >= 1:
                         filesToHandle.append(allFiles.pop(0))
 
-                p.append(Process(target=matchFinder, args=(filesToHandle, opts, args[0], totalWC, totalLC)))
+                p.append(Process(target=matchFinder, args=(filesToHandle, opts, args[0], totalWC, totalLC, mutex)))
+
+        # Execução e espera pela conclusão dos processos filhos 
 
         for process in p:
             process.start()
@@ -77,9 +82,10 @@ def main(argv):
 
     else:  # Caso a paralelização esteja desligada, todo o trabalho é feito pelo processo pai
 
-        matchFinder(allFiles, args, args[0], totalWC, totalLC)
+        matchFinder(allFiles, opts, args[0], totalWC, totalLC)
 
     print()  # estético
+    
     if parallelization:
         print(f"PID PAI: {os.getpid()}")
 
@@ -90,7 +96,8 @@ def main(argv):
         print(f"Total de linhas: {totalLC.value}")
 
 
-def matchFinder(files, args, word, totalWC, totalLC):
+def matchFinder(files, args, word, totalWC, totalLC, mutex=None):
+
     # Expressão regular responsável por identificar instâncias da palavra isolada
     regex = fr"\b{word}\b"
 
@@ -101,14 +108,11 @@ def matchFinder(files, args, word, totalWC, totalLC):
         lc = 0
         try:
             with open(file, "r", encoding="utf-8") as f:
-                output.append("=========================")
+                output.append("==================================================")
                 output.append(f"PID: {os.getpid()}\nFicheiro: {file}\n")
 
                 lineNumber = 0
 
-                # lines = f.readlines()
-
-                # for lineIndex in range(len(lines)):
                 for line in f:
                     lineNumber += 1
                     matches = re.findall(regex, line)
@@ -121,20 +125,31 @@ def matchFinder(files, args, word, totalWC, totalLC):
                         processedLine = re.sub(regex, RED_START + word + COLOR_END, line)
                         output.append(f"{GREEN_START}{lineNumber}{COLOR_END}: {processedLine}")
 
+                # Output do resultado de cada processo
+                # O mutex ajuda a impedir outputs intercalados e que o acesso às variáveis globais seja mediado
+
+                if mutex:
+                    mutex.acquire()
+
                 for line in output:
                     print(line)
 
                 print()
                 for opt in args:
                     if opt[0] == "-c":
-                        print(f"Total de ocorrências da palavra: {wc}.\nA enviar para o processo pai...")
+                        print(f"Total de ocorrências da palavra: {wc}\nA enviar para o processo pai...")
                     if opt[0] == "-l":
-                        print(f"Total de linhas em que a palavra apareceu: {lc}.\nA enviar para o processo pai...")
-                print(f"=========================\n")
+                        print(f"Total de linhas em que a palavra apareceu: {lc}\nA enviar para o processo pai...")
+                print(f"==================================================\n")
 
             # Incrementação nas variáveis de contagem em memória partilhada
             totalWC.value += wc
             totalLC.value += lc
+
+            # Libertação do mutex para que os outros processos possam imprimir o seu resultado
+            if mutex:
+                mutex.release()
+
         except FileNotFoundError:
             print(f"Ficheiro '{file}' não encontrado. Verifique o seu input.")
 
