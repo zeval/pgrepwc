@@ -99,26 +99,29 @@ def matchFinder(files, args, word, totalWC, totalLC):
 
     # Expressão regular responsável por identificar instâncias da palavra isolada
     regex = fr"\b{word}\b"
-    
+
     for file in files:
-        
-        with open(file, "r") as f:
+
+        with open(file, "r", encoding="utf-8") as f:
 
             print(f"PID: {os.getpid()}\nFicheiro: {file}\n")
 
-            lines = f.readlines()
-            
-            for lineIndex in range(len(lines)):
-                line = lines[lineIndex]
+            lineNumber = 0
+
+            # lines = f.readlines()
+
+            # for lineIndex in range(len(lines)):
+            for line in f:
+                lineNumber += 1
                 matches = re.findall(regex, line)
                 if matches:
                     lc += 1
                     wc += len(matches)
 
-                    # Uso do método re.sub() para substituir todas as instâncias da palavra isolada 
+                    # Uso do método re.sub() para substituir todas as instâncias da palavra isolada
                     # por instâncias da mesma em versão colorida
                     processedLine = re.sub(regex, RED_START + word + COLOR_END, line)
-                    print(f"{GREEN_START}{lineIndex+1}{COLOR_END}: {processedLine}")
+                    print(f"{GREEN_START}{lineNumber}{COLOR_END}: {processedLine}")
 
 
     # Incrementação nas variáveis de contagem em memória partilhada
