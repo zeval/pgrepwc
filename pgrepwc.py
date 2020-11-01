@@ -57,6 +57,7 @@ def main(argv):
 
         # Definição do número estimado de ficheiros a lidar por cada processo
         numberOfFilesPerProcess = ceil(len(allFiles)/numberOfProcesses)
+        p = []
 
         # Divisão do trabalho pelos vários processos
         for process in range(numberOfProcesses):
@@ -69,11 +70,12 @@ def main(argv):
                     if len(allFiles) >= 1:
                         filesToHandle.append(allFiles.pop(0))
 
+                p.append(Process(target=matchFinder, args=(filesToHandle, opts, args[0], totalWC, totalLC)))
 
-                p = Process(target = matchFinder, args=(filesToHandle, args, args[0], totalWC, totalLC))
-
-                p.start()
-                p.join()
+        for process in p:
+            process.start()
+        for process in p:
+            process.join()
         
     else: # Caso a paralelização esteja desligada, todo o trabalho é feito pelo processo pai
         
@@ -93,18 +95,21 @@ def main(argv):
 
 
 def matchFinder(files, args, word, totalWC, totalLC):
-    
-    wc = 0
-    lc = 0
+
+
 
     # Expressão regular responsável por identificar instâncias da palavra isolada
     regex = fr"\b{word}\b"
 
     for file in files:
 
-        with open(file, "r", encoding="utf-8") as f:
+        output = []
+        wc = 0
+        lc = 0
 
-            print(f"PID: {os.getpid()}\nFicheiro: {file}\n")
+        with open(file, "r", encoding="utf-8") as f:
+            output.append("=========================")
+            output.append(f"PID: {os.getpid()}\nFicheiro: {file}\n")
 
             lineNumber = 0
 
@@ -121,12 +126,23 @@ def matchFinder(files, args, word, totalWC, totalLC):
                     # Uso do método re.sub() para substituir todas as instâncias da palavra isolada
                     # por instâncias da mesma em versão colorida
                     processedLine = re.sub(regex, RED_START + word + COLOR_END, line)
-                    print(f"{GREEN_START}{lineNumber}{COLOR_END}: {processedLine}")
+                    output.append(f"{GREEN_START}{lineNumber}{COLOR_END}: {processedLine}")
+
+            for line in output:
+                print(line)
+
+            print()
+            for opt in args:
+                if opt[0] == "-c":
+                    print(f"Total de ocorrências da palavra: {wc}. A enviar para o processo pai...")
+                if opt[0] == "-l":
+                    print(f"Total de linhas em que a palavra apareceu: {lc}. A enviar para o processo pai...")
+            print(f"=========================\n")
 
 
-    # Incrementação nas variáveis de contagem em memória partilhada
-    totalWC.value += wc
-    totalLC.value += lc
+            # Incrementação nas variáveis de contagem em memória partilhada
+            totalWC.value += wc
+            totalLC.value += lc
 
 def removeDuplicates(inputList):
     """

@@ -57,10 +57,11 @@ def main(argv):
 
         # Definição do número estimado de ficheiros a lidar por cada thread
         numberOfFilesPerThread = ceil(len(allFiles)/numberOfThreads)
+        t = []
 
         # Divisão do trabalho pelas várias threads
         for process in range(numberOfThreads):
-            while len(allFiles)>0:
+            while len(allFiles) > 0:
 
                 filesToHandle = []
 
@@ -69,12 +70,12 @@ def main(argv):
                     if len(allFiles) >= 1:
                         filesToHandle.append(allFiles.pop(0))
 
+                t.append(Thread(target=matchFinder, args=(filesToHandle, opts, args[0], parallelization)))
 
-                newThread = Thread(target = matchFinder, args=(filesToHandle, args, args[0], parallelization))
-
-                newThread.start()
-                newThread.join()
-        
+        for thread in t:
+            thread.start()
+        for thread in t:
+            thread.join()
     else: # Caso a paralelização esteja desligada, todo o trabalho é feito sem threading
         
         matchFinder(allFiles, args, args[0], parallelization)
@@ -94,21 +95,21 @@ def matchFinder(files, args, word, parallelization):
 
     global totalLC
     global totalWC
-    
-    wc = 0
-    lc = 0
 
     # Expressão regular responsável por identificar instâncias da palavra isolada
     regex = fr"\b{word}\b"
 
-    if parallelization:
-        print(f"Thread ID: {current_thread().ident}")
-    
     for file in files:
-        
+        output = []
+        wc = 0
+        lc = 0
+
         with open(file, "r", encoding="utf-8") as f:
 
-            print(f"Ficheiro: {file}\n")
+            print(f"=========================")
+            if parallelization:
+                output.append(f"Thread ID: {current_thread().ident}")
+            output.append(f"Ficheiro: {file}\n")
 
             lineNumber = 0
 
@@ -125,10 +126,22 @@ def matchFinder(files, args, word, parallelization):
                     # Uso do método re.sub() para substituir todas as instâncias da palavra isolada 
                     # por instâncias da mesma em versão colorida
                     processedLine = re.sub(regex, RED_START + word + COLOR_END, line)
-                    print(f"{GREEN_START}{lineNumber}{COLOR_END}: {processedLine}")
+                    output.append(f"{GREEN_START}{lineNumber}{COLOR_END}: {processedLine}")
 
-    totalWC += wc
-    totalLC += lc
+            for line in output:
+                print(line)
+
+            print()
+            for opt in args:
+                if opt[0] == "-c":
+                    print(f"Total de ocorrências da palavra: {wc}. A enviar para o processo pai...")
+                if opt[0] == "-l":
+                    print(f"Total de linhas em que a palavra apareceu: {lc}. A enviar para o processo pai...")
+            print(f"=========================\n")
+
+
+            totalWC += wc
+            totalLC += lc
 
 def removeDuplicates(inputList):
     """
