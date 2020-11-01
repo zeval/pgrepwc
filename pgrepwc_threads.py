@@ -131,9 +131,9 @@ def matchFinder(files, args, word, parallelization):
                 print()
                 for opt in args:
                     if opt[0] == "-c":
-                        print(f"Total de ocorrências da palavra: {wc}.\nA enviar para o processo pai...")
+                        print(f"Total de ocorrências da palavra: {wc}.\nA enviar para o processo pai...\n")
                     if opt[0] == "-l":
-                        print(f"Total de linhas em que a palavra apareceu: {lc}.\nA enviar para o processo pai...")
+                        print(f"Total de linhas em que a palavra apareceu: {lc}.\nA enviar para o processo pai...\n")
                 print(f"=========================\n")
 
                 totalWC += wc
