@@ -5,6 +5,7 @@ import re
 import platform
 from math import ceil
 from multiprocessing import Value, Process, Lock
+from Load import Load
 
 # Constante/Definição de cor
 RED_START = '\033[91m'
@@ -14,19 +15,24 @@ if platform.system() == "Windows":
     os.system('color')
 
 
+processTable = dict()
+
+
 def main(argv):
     try:
         # Obter argumentos, opções
-        opts, args = getopt.getopt(argv, "clp:")
+        opts, args = getopt.getopt(argv, "clp:a:")
 
     except getopt.GetoptError:
         # Mensagem de ajuda caso o comando seja malformado
-        print("Utilização: pgrepwc [-c|-l] [-p n] palavra {ficheiros}")
+        print("Utilização: pgrepwc [-c|-l] [-p n] [-a s] palavra <ficheiros>")
         sys.exit(2)
 
     # Por omissão, todas as pesquisas/contagens são feitas no processo pai, pelo que não se dá paralelização
     numberOfProcesses = 1
     parallelization = False
+
+    statusReportInterval = None
 
     if len(args) == 1:  # Caso apenas seja dada a palavra, e não os nomes dos ficheiros
         print("Introduza os nomes dos ficheiros a pesquisar, numa linha, separados por espaços:")
@@ -41,9 +47,8 @@ def main(argv):
             parallelization = True  # Ativar paralelização caso a opção "-p n" seja utilizada
             if numberOfProcesses == 0:  # Evitar erros se for pedido "-p 0", desligando a paralelização
                 parallelization = False
-
-    if numberOfProcesses > len(allFiles):  # Evitar ciclos do for desnecessários, utilizar no máximo tantos
-        numberOfProcesses = len(allFiles)  # processos como ficheiros referidos
+        if opt[0] == "-a":
+            statusReportInterval = int(opt[1])
 
     # Definição das variáveis de contagem em memória partilhada
     totalWC = Value("i", 0)
@@ -51,37 +56,132 @@ def main(argv):
 
     if parallelization:
 
-        # Definição do número estimado de ficheiros a lidar por cada processo
-        numberOfFilesPerProcess = ceil(len(allFiles) / numberOfProcesses)
+        # # Definição do número estimado de ficheiros a lidar por cada processo
+        # numberOfFilesPerProcess = ceil(len(allFiles) / numberOfProcesses)
+
+        #####
+
+        allFilesSize = 0
+        for file in allFiles:
+            allFilesSize += os.path.getsize(file)
+        #####
+
+        bytesPerProcess = ceil(allFilesSize/numberOfProcesses)
 
         # Definição de lista de processos a executar
         p = []
 
         # Definição de um mutex para evitar problemas de sincronização / outputs intercalados
         mutex = Lock()
-
+        
         # Divisão do trabalho pelos vários processos
+
+        fileIndex = 0
+        previousProcess = None
+        nextProcess = False
+
+        
+        ## Weird bug when using 1 big file, 1 medium file, 2 small files for 2 processes... seems fixable, maybe it's working properly idk too sleepy :////
+
         for process in range(numberOfProcesses):
-            while len(allFiles) > 0:
+            nextProcess = False
+            while not nextProcess and fileIndex < len(allFiles):
 
-                filesToHandle = []
+                nextProcess = False
 
-                for i in range(numberOfFilesPerProcess):
+                if process > 0:
+                    previousProcess = processTable[process - 1]
 
-                    if len(allFiles) >= 1:
-                        filesToHandle.append(allFiles.pop(0))
+                if process not in processTable:
+                    processTable[process] = []
+                    bytesToHandle = bytesPerProcess
 
-                p.append(Process(target=matchFinder, args=(filesToHandle, opts, args[0], totalWC, totalLC, mutex)))
+                fileSize = os.path.getsize(allFiles[fileIndex])
+                
+                if not previousProcess:
+
+                    if fileSize <= bytesPerProcess:
+                        processTable[process].append(Load(allFiles[fileIndex], 0, fileSize))
+                        fileIndex += 1
+                    else:
+                        processTable[process].append(Load(allFiles[fileIndex], 0, bytesToHandle))
+                    
+                else:
+
+                    previousProcessLoad = previousProcess[-1]
+
+                    if previousProcess[-1].getFile() == allFiles[fileIndex]:
+                        
+                        if (previousProcessLoad.getEnd() + bytesToHandle) + 1 > fileSize:
+                            processTable[process].append(Load(allFiles[fileIndex], previousProcessLoad.getEnd() + 1, fileSize - previousProcessLoad.getEnd() - 1))
+                            fileIndex += 1
+                        else: 
+                            processTable[process].append(Load(allFiles[fileIndex], previousProcessLoad.getEnd() + 1, bytesToHandle))
+                    else: 
+
+                        if fileSize <= bytesToHandle:
+                            processTable[process].append(Load(allFiles[fileIndex], 0, fileSize))
+                            fileIndex += 1
+                        else:
+                            processTable[process].append(Load(allFiles[fileIndex], 0, bytesToHandle))
+
+                # Current process load
+                processLoad = 0
+                for loadUnit in processTable[process]:
+                    processLoad += loadUnit.getBytesToHandle()
+
+                if processLoad >= bytesPerProcess:
+                    nextProcess = True
+                    bytesToHandle = bytesPerProcess
+                else:
+                    bytesToHandle = bytesPerProcess - processLoad
+                
+
+
+
+    ## Estas linhas mostram a carga em cada processo :) Tip: variable watch processLoads
+
+        processLoads = []
+        for process in processTable.values():
+            processLoad = 0
+            for loadUnit in process:
+                processLoad += loadUnit.getBytesToHandle()
+            processLoads.append(processLoad)
+
+        assert 1==1 # Optimal place for breakpoint :)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
 
         # Execução e espera pela conclusão dos processos filhos 
 
-        for process in p:
-            process.start()
-        for process in p:
-            process.join()
+        for fileProcesses in processTable.values():
+            for processTuple in fileProcesses:
+                processTuple[0].start()
+
+        for fileProcesses in processTable.values():
+            for processTuple in fileProcesses:
+                processTuple[0].join()
 
     else:  # Caso a paralelização esteja desligada, todo o trabalho é feito pelo processo pai
 
+        # TODO: Fix this (case same process handles all files)
         matchFinder(allFiles, opts, args[0], totalWC, totalLC)
 
     if parallelization:
