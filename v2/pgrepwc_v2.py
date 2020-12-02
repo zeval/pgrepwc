@@ -87,36 +87,70 @@ def main(argv):
             nextProcess = False
             while not nextProcess and fileIndex < len(allFiles):
 
+
+                # Redefine-se o valor de nextProcess para False, pois só se deve avançar para a atribuição de carga ao próximo processo
+                # quando a capacidade de carga total do processo atual tiver sido atingida.
                 nextProcess = False
 
+                # Caso este processo não seja o primeiro a correr, utilizar previousProcess para referenciar o processo anterior.
                 if process > 0:
                     previousProcess = processTable[process - 1]
 
+                # Caso este processo ainda não esteja registado na tabela de processos:
+                # • Adiciona-se uma entrada cuja chave é o número do processo;
+                # • bytesToHandle é a média de bytesPerProcess pois este processo ainda não tem carga atribuida.
                 if process not in processTable:
                     processTable[process] = []
                     bytesToHandle = bytesPerProcess
 
+
+                # Obter tamanho do ficheiro com que se está a lidar
                 fileSize = os.path.getsize(allFiles[fileIndex])
                 
+                # Caso este seja o primeiro processo (ou seja: previousProcess == None):
                 if not previousProcess:
-
+                    
+                    # Caso o tamanho do ficheiro seja menor ou igual à média de bytesPerProcess, atribui-se
+                    # ao processo a carga de bytes fileSize, sendo o ficheiro tratado interiamente por um processo,
+                    # e dá-se a instrução de que passamos a lidar com o próximo ficheiro (fileIndex += 1).
                     if fileSize <= bytesPerProcess:
                         processTable[process].append(Load(allFiles[fileIndex], 0, fileSize))
                         fileIndex += 1
+                    
+                    # Caso contrário (o tamanho do ficheiro é maior que a média bytesPerProcess), diz-se apenas que
+                    # este processo terá que lidar com bytesToHandle bytes deste ficheiro (que neste caso será o valor
+                    # inicial de bytesToHandle: a média bytesPerProcess.
                     else:
                         processTable[process].append(Load(allFiles[fileIndex], 0, bytesToHandle))
                     
+                # Caso contrário (se este não for o primeiro processo):
                 else:
-
+                    
+                    # Referencia-se a carga mais recente do último processo (o último objeto Load do processo anterior)
                     previousProcessLoad = previousProcess[-1]
 
+                    # Caso a última carga do processo anterior tiver a ver com o ficheiro com que se lida atualmente, iremos
+                    # então tratar apenas dos bytes após o byte em que o processo anterior terminou (previousProcessLoad.getEnd() + 1).
                     if previousProcess[-1].getFile() == allFiles[fileIndex]:
                         
+                        # Caso os bytes que o processo anterior está encarregue + bytesToHandle for maior que fileSize,
+                        # este processo lidará então com os bytes que faltarem do ficheiro atual, representados por:
+                        # (fileSize - previousProcessLoad.getEnd() - 1). Dá-se a seguir a instrução de que passamos a lidar
+                        # com o próximo ficheiro (fileIndex += 1).
                         if (previousProcessLoad.getEnd() + bytesToHandle) + 1 > fileSize:
                             processTable[process].append(Load(allFiles[fileIndex], previousProcessLoad.getEnd() + 1, fileSize - previousProcessLoad.getEnd() - 1))
                             fileIndex += 1
+                        
+                        # Caso contrário (se os bytes que o processo anterior está encarregue + bytesToHandle for menor que fileSize),
+                        # o processo atual irá lidar com mais bytesToHandle bytes do ficheiro atual.
                         else: 
                             processTable[process].append(Load(allFiles[fileIndex], previousProcessLoad.getEnd() + 1, bytesToHandle))
+
+                    # Caso contrário (se a última carga do processo anterior não tiver a ver com o ficheiro atual, ou seja, se estivermos
+                    # a tratar de um ficheiro novo), este processo ficará encarregue de lidar com mais fileSize bytes do ficheiro atual
+                    # ou bytesToHandle bytes do ficheiro atual, dependendo se o tamanho do ficheiro é maior que a capacidade de carga
+                    # que falta ao processo ou não.
+
                     else: 
 
                         if fileSize <= bytesToHandle:
@@ -125,14 +159,26 @@ def main(argv):
                         else:
                             processTable[process].append(Load(allFiles[fileIndex], 0, bytesToHandle))
 
-                # Current process load
+                # Cálculo da carga total atual do processo. Este passo cálcula bytesToHandle (ou seja, cálcula quantos bytes o processo 
+                # ainda poderá tratar conforme a média de bytesPerProcess). Este passo assegura que qualquer processo n em 0 <= n < numberOfProcesses
+                # irá apenas lidar com (no máximo) bytesPerProcess bytes, e nunca mais que isso, certificando-se assim da equitatividade na distribuição
+                # de carga pelos vários processos.
+                # ATENÇÃO: É importante reconhecer que a média bytesPerProcess é cálculada com base no tamanho total do agregado de ficheiros.
+
                 processLoad = 0
                 for loadUnit in processTable[process]:
                     processLoad += loadUnit.getBytesToHandle()
 
+                # Caso a carga total do processo já seja igual ou maior que a média bytesPerProcess, passa-se então a atribuir carga ao próximo processo,
+                # inibindo o ciclo while de correr com a instrução "nextProcess = True", causando uma próxima iteração do ciclo for que itera sobre o índice
+                # de processos. Dá-se também a instrução "bytesToHandle = bytesPerProcess", reiniciando o valor de bytesToHandle para que o próximo processo
+                # possa lidar com o valor correto de bytes por cada processo.
                 if processLoad >= bytesPerProcess:
                     nextProcess = True
                     bytesToHandle = bytesPerProcess
+                
+                # Caso contrário (se o processo ainda não tiver atingido a sua capacidade de carga total), bytesToHandle, na próxima iteração, será o quanto
+                # falta para a capacidade de carga do processo chegar ao seu total (valor cálculado pela instrução "bytesPerProcess - processLoad")
                 else:
                     bytesToHandle = bytesPerProcess - processLoad
                 
@@ -147,6 +193,8 @@ def main(argv):
             for loadUnit in process:
                 processLoad += loadUnit.getBytesToHandle()
             processLoads.append(processLoad)
+
+        print(processLoads)
 
         assert 1==1 # Optimal place for breakpoint :)
 
