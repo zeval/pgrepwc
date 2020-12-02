@@ -185,7 +185,7 @@ def main(argv):
 
 
 
-    ## Estas linhas mostram a carga em cada processo :) Tip: variable watch processLoads
+    ####### Estas linhas mostram a carga em cada processo :) Tip: variable watch processLoads
 
         processLoads = []
         for process in processTable.values():
@@ -199,23 +199,9 @@ def main(argv):
         assert 1==1 # Optimal place for breakpoint :)
 
 
+    #######
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    
+    # Falta iterar sobre a processTable e dar as Loads aos respetivos processos
 
         # Execução e espera pela conclusão dos processos filhos 
 
