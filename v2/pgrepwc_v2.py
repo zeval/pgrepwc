@@ -3,9 +3,13 @@ import getopt
 import os
 import re
 import platform
+import fileinput
 from math import ceil
-from multiprocessing import Value, Process, Lock
+from multiprocessing import Value, Process, Lock, Queue
 from Load import Load
+from Match import Match
+import signal
+import asyncio
 
 # Constante/Definição de cor
 RED_START = '\033[91m'
@@ -16,9 +20,20 @@ if platform.system() == "Windows":
 
 
 processTable = dict()
+queue = None
+totalWC = None
+totalLC = None
+timeCounter = 0
+statusReportInterval = None
 
 
 def main(argv):
+    global totalWC
+    global totalLC
+    global queue
+    global statusReportInterval
+
+
     try:
         # Obter argumentos, opções
         opts, args = getopt.getopt(argv, "clp:a:")
@@ -31,8 +46,6 @@ def main(argv):
     # Por omissão, todas as pesquisas/contagens são feitas no processo pai, pelo que não se dá paralelização
     numberOfProcesses = 1
     parallelization = False
-
-    statusReportInterval = None
 
     if len(args) == 1:  # Caso apenas seja dada a palavra, e não os nomes dos ficheiros
         print("Introduza os nomes dos ficheiros a pesquisar, numa linha, separados por espaços:")
@@ -73,7 +86,12 @@ def main(argv):
 
         # Definição de um mutex para evitar problemas de sincronização / outputs intercalados
         mutex = Lock()
-        
+
+        # Definição de uma Queue onde os processos-filho irão submeter os seus resultados
+
+        queue = Queue()
+
+
         # Divisão do trabalho pelos vários processos
 
         fileIndex = 0
@@ -185,38 +203,76 @@ def main(argv):
 
 
 
-    ####### Estas linhas mostram a carga em cada processo :) Tip: variable watch processLoads
+    # ####### Estas linhas mostram a carga em cada processo :) Tip: variable watch processLoads
 
-        processLoads = []
-        for process in processTable.values():
-            processLoad = 0
-            for loadUnit in process:
-                processLoad += loadUnit.getBytesToHandle()
-            processLoads.append(processLoad)
+    #     processLoads = []
+    #     for process in processTable.values():
+    #         processLoad = 0
+    #         for loadUnit in process:
+    #             processLoad += loadUnit.getBytesToHandle()
+    #         processLoads.append(processLoad)
 
-        print(processLoads)
+    #     print(processLoads)
 
-        assert 1==1 # Optimal place for breakpoint :)
+    #     assert 1==1 # Optimal place for breakpoint :)
 
 
-    #######
+    # #######
 
-    # Falta iterar sobre a processTable e dar as Loads aos respetivos processos
+
+        processList = list()
+
+        for process in processTable:
+            processList.append(Process(target=matchFinder, args=(processTable[process], opts, args[0], totalWC, totalLC, mutex, queue)))
+
 
         # Execução e espera pela conclusão dos processos filhos 
 
-        for fileProcesses in processTable.values():
-            for processTuple in fileProcesses:
-                processTuple[0].start()
+        for process in processList:
+            process.start()
 
-        for fileProcesses in processTable.values():
-            for processTuple in fileProcesses:
-                processTuple[0].join()
+
+
+        if statusReportInterval:
+            if platform.system() == "Windows":
+                # await realtimeFeedbackAlt()
+                pass
+            
+            else: 
+                signal.signal(signal.SIGALRM, realtimeFeedback)
+                signal.setitimer(signal.ITIMER_REAL, 1, 1)
+
+        
+        for process in processList:
+            process.join()
+
+
+        outputs = []
+        while queue:
+            outputs.append(queue.get())
+        
+        
+
+        assert 1==1
+        
+
+
+
+        
+
+        
 
     else:  # Caso a paralelização esteja desligada, todo o trabalho é feito pelo processo pai
 
         # TODO: Fix this (case same process handles all files)
-        matchFinder(allFiles, opts, args[0], totalWC, totalLC)
+
+        fullLoad = list()
+
+        for file in allFiles:
+            fileSize = os.path.getsize(file)
+            fullLoad.append(Load(file, 0, fileSize))
+
+        matchFinder(fullLoad, opts, args[0], totalWC, totalLC)
 
     if parallelization:
         print(f"PID PAI: {os.getpid()}")
@@ -228,65 +284,64 @@ def main(argv):
         print(f"Total de linhas: {totalLC.value}")
 
 
-def matchFinder(files, args, word, totalWC, totalLC, mutex=None):
+def matchFinder(loadList, args, word, totalWC, totalLC, mutex=None, queue=None):
 
     # Expressão regular responsável por identificar instâncias da palavra isolada
     regex = fr"\b{word}\b"
 
-    for file in files:
+    outputTable = dict()
 
-        output = []
+    for load in loadList:
+
+        file = load.getFile()
+        offset = load.getOffset()
+        loadSize = load.getBytesToHandle()
+        end = load.getEnd()
         wc = 0
         lc = 0
+
+        if file not in outputTable:
+            outputTable[file] = []
+        
+        firstLine = lineCounter(file, offset)
+
         try:
-            with open(file, "r", encoding="utf-8") as f:
-                output.append("==================================================")
-                output.append(f"PID: {os.getpid()}\nFicheiro: {file}\n")
+            with open(file, "r", encoding="ISO-8859-1") as f:
+                lineNumber = firstLine
+                f.seek(offset)
+                line = f.readline()
 
-                lineNumber = 0
 
-                for line in f:
-                    lineNumber += 1
+                while line and f.tell() <= load.getEnd():
                     matches = re.findall(regex, line)
+
                     if matches:
-                        lc += 1
-                        wc += len(matches)
 
                         # Uso do método re.sub() para substituir todas as instâncias da palavra isolada
                         # por instâncias da mesma em versão colorida
                         processedLine = re.sub(regex, RED_START + word + COLOR_END, line)
-                        output.append(f"{GREEN_START}{lineNumber}{COLOR_END}: {processedLine}")
+                        
+                        outputTable[file].append(Match(file, lineNumber, f"{GREEN_START}{lineNumber}{COLOR_END}: {processedLine}", len(matches)))
 
-                # Output do resultado de cada processo
-                # O mutex ajuda a impedir outputs intercalados e que o acesso às variáveis globais seja mediado
+                        if mutex:
+                            mutex.acquire()
+                            totalWC.value += len(matches)
+                            totalLC.value += 1
+                            mutex.release()
 
-                if mutex:
-                    mutex.acquire()
-
-                for line in output:
-                    print(line)
-
-                print()
-                for opt in args:
-                    if opt[0] == "-c":
-                        print(f"Total de ocorrências da palavra: {wc}\n"
-                              f"A enviar para o processo pai ({os.getppid()})...")
-                    if opt[0] == "-l":
-                        print(f"Total de linhas em que a palavra apareceu: {lc}\n"
-                              f"A enviar para o processo pai ({os.getppid()})...")
-                print(f"==================================================\n")
-
-            # Incrementação nas variáveis de contagem em memória partilhada
-            totalWC.value += wc
-            totalLC.value += lc
-
-            # Libertação do mutex para que os outros processos possam imprimir o seu resultado
-            if mutex:
-                mutex.release()
-
+                    line = f.readline()         
+                    lineNumber += 1
+  
         except FileNotFoundError:
             print(f"Ficheiro '{file}' não encontrado. Verifique o seu input.")
 
+        except UnicodeDecodeError as e:
+            print(e, file)
+
+    if queue:
+        queue.put(outputTable)
+
+    assert 1==1
 
 def removeDuplicates(inputList):
     """
@@ -295,6 +350,57 @@ def removeDuplicates(inputList):
     Ensures: uma lista semelhante a inputList, sem elementos duplicados.
     """
     return list(dict.fromkeys(inputList))
+
+def lineCounter(file, pos):
+    """
+    TODO: Comentar
+    """
+
+    # Abrindo o ficheiro como binário é várias vezes mais rápido e eficiente
+    # do que abrir como ficheiro de texto.
+    with open(file, "rb+") as f:
+        count = 0
+        line = f.readline()
+        
+        while line:
+            a = f.tell()
+            count += 1
+            if f.tell()>pos:
+                return count
+            line = f.readline()
+
+def realtimeFeedback(sig, NULL):
+
+    global queue
+    global totalLC
+    global totalWC
+    global timeCounter
+    global statusReportInterval
+    timeCounter += 1
+
+    if timeCounter % statusReportInterval == 0:
+        print(f"Passaram {timeCounter} segundos")
+
+async def realtimeFeedbackAlt():
+    """
+    A versão da package "signal" para Windows não suporta signal.SIGALRM.
+    Esta é uma alternativa utilizando a package "asyncio"
+    """
+
+    global queue
+    global totalLC
+    global totalWC
+    global statusReportInterval
+
+    timecounter = 5
+
+    while True:
+
+        print(f"Passaram {timeCounter} segundos")
+        timeCounter += 5
+        asyncio.sleep(5)
+    
+    return
 
 
 if __name__ == "__main__":

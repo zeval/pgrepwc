@@ -1,6 +1,6 @@
 class Load:
     """
-    FALTA DOCUMENTAR XDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
+    TODO: Comentar
     """
     def __init__(self, file, offset, bytesToHandle):
         self._file = file
