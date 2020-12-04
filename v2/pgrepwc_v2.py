@@ -239,17 +239,14 @@ def main(argv):
         for process in processList:
             process.start()
 
+        time.sleep(1)
+
         for process in processList:
             process.join()
 
         after = time.time()
 
-        print(outputTable)
-
-        
-
-
-
+        # print(outputTable)
 
         if statusReportInterval:
             if platform.system() == "Windows":
@@ -272,7 +269,7 @@ def main(argv):
 
 
         fullLoad = list()
-        outputTable = dict()   
+        outputTable = dict()
 
         for file in allFiles:
             fileSize = os.path.getsize(file)
@@ -281,6 +278,39 @@ def main(argv):
         before = time.time()
         matchFinder(fullLoad, opts, args[0], totalWC, totalLC, outputTable = outputTable)
         after = time.time()
+
+    
+
+    # MOSTRAR OUTPUT
+
+    
+    processedOutputTable = dict()
+
+    before1 = time.time()
+
+    # Organização de output: passagem e um dicionário partilhado de estrutura
+    # orientada a processos, para um dicionário local de estrutura orientada
+    # a ficheiros.
+    for pid in outputTable:
+        for match in outputTable[pid]:
+            if match.getFile() not in processedOutputTable:
+                processedOutputTable[match.getFile()] = []
+            processedOutputTable[match.getFile()].append(match)
+    
+    for file in processedOutputTable:
+        processedOutputTable[file].sort(key=lambda match: (match.getLineNumber()))
+    
+
+            
+    after1 = time.time()
+    
+    # Uncomment to show output
+    # for file in processedOutputTable:
+    #     for match in processedOutputTable[file]:
+    #         print(match.getLineContent())
+            
+    print("processing time:", after1 - before1)
+
 
     if parallelization:
         print(f"PID PAI: {os.getpid()}")
@@ -292,14 +322,13 @@ def main(argv):
         print(f"Total de linhas: {totalLC.value}")
     
     print("Tempo total:", after - before)
+    assert 1==1
 
 
 def matchFinder(loadList, args, word, totalWC, totalLC, mutex=None, outputTable=None):
 
     # Expressão regular responsável por identificar instâncias da palavra isolada
     regex = fr"\b{word}\b"
-
-    outputTable = dict()
 
     before = time.time()
 
@@ -311,9 +340,10 @@ def matchFinder(loadList, args, word, totalWC, totalLC, mutex=None, outputTable=
         end = load.getEnd()
         wc = 0
         lc = 0
+        pid = os.getpid()
 
-        if file not in outputTable:
-            outputTable[file] = []
+        # if file not in outputTable:
+        #     outputTable[file] = []
         
         firstLine = lineCounter(file, offset)
 
@@ -322,9 +352,10 @@ def matchFinder(loadList, args, word, totalWC, totalLC, mutex=None, outputTable=
                 lineNumber = firstLine
                 f.seek(offset)
                 line = f.readline()
-
-                outputTable[file] = ""
-                output = ""
+                
+                if pid not in outputTable:
+                    outputTable[pid] = []
+                output = []
 
                 while line and f.tell() <= load.getEnd():
                     matches = re.findall(regex, line)
@@ -334,10 +365,9 @@ def matchFinder(loadList, args, word, totalWC, totalLC, mutex=None, outputTable=
                         # Uso do método re.sub() para substituir todas as instâncias da palavra isolada
                         # por instâncias da mesma em versão colorida
                         processedLine = re.sub(regex, RED_START + word + COLOR_END, line)
-                        
-                        #outputTable[file].append(Match(file, lineNumber, f"{GREEN_START}{lineNumber}{COLOR_END}: {processedLine}", len(matches)))
+                        output.append(Match(file, lineNumber, f"{GREEN_START}{lineNumber}{COLOR_END}: {processedLine}", len(matches)))
 
-                        output += f"{GREEN_START}{lineNumber}{COLOR_END}: {processedLine}"
+                        # output += f"{GREEN_START}{lineNumber}{COLOR_END}: {processedLine}"
 
                         if mutex:
                             mutex.acquire()
@@ -351,10 +381,14 @@ def matchFinder(loadList, args, word, totalWC, totalLC, mutex=None, outputTable=
                     line = f.readline()         
                     lineNumber += 1
 
-                if mutex:
-                    mutex.acquire()
-                    outputTable[file] += output
-                    mutex.release()
+                # if mutex:
+                #     mutex.acquire()
+                #     outputTable[pid] = output
+                #     mutex.release()
+                # else:
+                #     outputTable[pid] = output
+
+                outputTable[pid] = output
   
         except FileNotFoundError:
             print(f"Ficheiro '{file}' não encontrado. Verifique o seu input.")
@@ -416,13 +450,13 @@ async def realtimeFeedbackAlt():
     global totalWC
     global statusReportInterval
 
-    timecounter = 5
+    timeCounter = 5
 
     while True:
-
+        asyncio.sleep(5)
         print(f"Passaram {timeCounter} segundos")
         timeCounter += 5
-        asyncio.sleep(5)
+
     
     return
 
