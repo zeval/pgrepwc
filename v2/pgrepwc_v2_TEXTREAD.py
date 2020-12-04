@@ -397,7 +397,7 @@ def matchFinder(loadList, args, word, totalWC, totalLC, mutex=None, outputTable=
             print(e, file)
 
     after = time.time()
-    # print("HERE: ", after-before)
+    print("HERE: ", after-before)
 
 
 

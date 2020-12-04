@@ -136,8 +136,8 @@ def matchFinder(files, args, word, totalWC, totalLC, mutex=None):
                 if mutex:
                     mutex.acquire()
 
-                # for line in output:
-                #     print(line)
+                for line in output:
+                    print(line)
 
                 print()
                 for opt in args:
