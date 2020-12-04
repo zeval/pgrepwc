@@ -5,6 +5,7 @@ import re
 import platform
 from math import ceil
 from multiprocessing import Value, Process, Lock
+import time
 
 # Constante/Definição de cor
 RED_START = '\033[91m'
@@ -75,14 +76,18 @@ def main(argv):
 
         # Execução e espera pela conclusão dos processos filhos 
 
+        before = time.time()
         for process in p:
             process.start()
         for process in p:
             process.join()
+        after = time.time()
 
     else:  # Caso a paralelização esteja desligada, todo o trabalho é feito pelo processo pai
 
+        before = time.time()
         matchFinder(allFiles, opts, args[0], totalWC, totalLC)
+        after = time.time()
 
     if parallelization:
         print(f"PID PAI: {os.getpid()}")
@@ -92,6 +97,8 @@ def main(argv):
 
     if any("-l" in opt for opt in opts):
         print(f"Total de linhas: {totalLC.value}")
+    
+    print("Tempo total:", after - before)
 
 
 def matchFinder(files, args, word, totalWC, totalLC, mutex=None):
@@ -129,8 +136,8 @@ def matchFinder(files, args, word, totalWC, totalLC, mutex=None):
                 if mutex:
                     mutex.acquire()
 
-                for line in output:
-                    print(line)
+                # for line in output:
+                #     print(line)
 
                 print()
                 for opt in args:

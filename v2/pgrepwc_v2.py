@@ -5,11 +5,12 @@ import re
 import platform
 import fileinput
 from math import ceil
-from multiprocessing import Value, Process, Lock, Queue
+from multiprocessing import Value, Process, Lock, Manager
 from Load import Load
 from Match import Match
 import signal
 import asyncio
+import time
 
 # Constante/Definição de cor
 RED_START = '\033[91m'
@@ -20,17 +21,19 @@ if platform.system() == "Windows":
 
 
 processTable = dict()
-queue = None
 totalWC = None
 totalLC = None
 timeCounter = 0
 statusReportInterval = None
+manager = None
+outputTable = None
+
 
 
 def main(argv):
     global totalWC
     global totalLC
-    global queue
+    global outputTable
     global statusReportInterval
 
 
@@ -69,6 +72,9 @@ def main(argv):
 
     if parallelization:
 
+        manager = Manager()
+        outputTable = manager.dict()
+
         # # Definição do número estimado de ficheiros a lidar por cada processo
         # numberOfFilesPerProcess = ceil(len(allFiles) / numberOfProcesses)
 
@@ -87,9 +93,7 @@ def main(argv):
         # Definição de um mutex para evitar problemas de sincronização / outputs intercalados
         mutex = Lock()
 
-        # Definição de uma Queue onde os processos-filho irão submeter os seus resultados
-
-        queue = Queue()
+        # TODO:fix comment -> Definição de uma Queue onde os processos-filho irão submeter os seus resultados
 
 
         # Divisão do trabalho pelos vários processos
@@ -100,7 +104,6 @@ def main(argv):
 
         
         ## Weird bug when using 1 big file, 1 medium file, 2 small files for 2 processes... seems fixable, maybe it's working properly idk too sleepy :////
-
         for process in range(numberOfProcesses):
             nextProcess = False
             while not nextProcess and fileIndex < len(allFiles):
@@ -161,7 +164,7 @@ def main(argv):
                         
                         # Caso contrário (se os bytes que o processo anterior está encarregue + bytesToHandle for menor que fileSize),
                         # o processo atual irá lidar com mais bytesToHandle bytes do ficheiro atual.
-                        else: 
+                        else:
                             processTable[process].append(Load(allFiles[fileIndex], previousProcessLoad.getEnd() + 1, bytesToHandle))
 
                     # Caso contrário (se a última carga do processo anterior não tiver a ver com o ficheiro atual, ou seja, se estivermos
@@ -199,7 +202,10 @@ def main(argv):
                 # falta para a capacidade de carga do processo chegar ao seu total (valor cálculado pela instrução "bytesPerProcess - processLoad")
                 else:
                     bytesToHandle = bytesPerProcess - processLoad
-                
+
+
+
+        assert 1==1
 
 
 
@@ -223,13 +229,25 @@ def main(argv):
         processList = list()
 
         for process in processTable:
-            processList.append(Process(target=matchFinder, args=(processTable[process], opts, args[0], totalWC, totalLC, mutex, queue)))
+            processList.append(Process(target=matchFinder, args=(processTable[process], opts, args[0], totalWC, totalLC, mutex, outputTable)))
 
 
         # Execução e espera pela conclusão dos processos filhos 
 
+        before = time.time()
+
         for process in processList:
             process.start()
+
+        for process in processList:
+            process.join()
+
+        after = time.time()
+
+        print(outputTable)
+
+        
+
 
 
 
@@ -243,36 +261,26 @@ def main(argv):
                 signal.setitimer(signal.ITIMER_REAL, 1, 1)
 
         
-        for process in processList:
-            process.join()
+        # print(outputs)
 
-
-        outputs = []
-        while queue:
-            outputs.append(queue.get())
-        
-        
 
         assert 1==1
         
 
-
-
-        
-
-        
-
     else:  # Caso a paralelização esteja desligada, todo o trabalho é feito pelo processo pai
 
-        # TODO: Fix this (case same process handles all files)
+
 
         fullLoad = list()
+        outputTable = dict()   
 
         for file in allFiles:
             fileSize = os.path.getsize(file)
             fullLoad.append(Load(file, 0, fileSize))
 
-        matchFinder(fullLoad, opts, args[0], totalWC, totalLC)
+        before = time.time()
+        matchFinder(fullLoad, opts, args[0], totalWC, totalLC, outputTable = outputTable)
+        after = time.time()
 
     if parallelization:
         print(f"PID PAI: {os.getpid()}")
@@ -282,14 +290,18 @@ def main(argv):
 
     if any("-l" in opt for opt in opts):
         print(f"Total de linhas: {totalLC.value}")
+    
+    print("Tempo total:", after - before)
 
 
-def matchFinder(loadList, args, word, totalWC, totalLC, mutex=None, queue=None):
+def matchFinder(loadList, args, word, totalWC, totalLC, mutex=None, outputTable=None):
 
     # Expressão regular responsável por identificar instâncias da palavra isolada
     regex = fr"\b{word}\b"
 
     outputTable = dict()
+
+    before = time.time()
 
     for load in loadList:
 
@@ -311,6 +323,8 @@ def matchFinder(loadList, args, word, totalWC, totalLC, mutex=None, queue=None):
                 f.seek(offset)
                 line = f.readline()
 
+                outputTable[file] = ""
+                output = ""
 
                 while line and f.tell() <= load.getEnd():
                     matches = re.findall(regex, line)
@@ -321,16 +335,26 @@ def matchFinder(loadList, args, word, totalWC, totalLC, mutex=None, queue=None):
                         # por instâncias da mesma em versão colorida
                         processedLine = re.sub(regex, RED_START + word + COLOR_END, line)
                         
-                        outputTable[file].append(Match(file, lineNumber, f"{GREEN_START}{lineNumber}{COLOR_END}: {processedLine}", len(matches)))
+                        #outputTable[file].append(Match(file, lineNumber, f"{GREEN_START}{lineNumber}{COLOR_END}: {processedLine}", len(matches)))
+
+                        output += f"{GREEN_START}{lineNumber}{COLOR_END}: {processedLine}"
 
                         if mutex:
                             mutex.acquire()
                             totalWC.value += len(matches)
                             totalLC.value += 1
                             mutex.release()
+                        else:
+                            totalWC.value += len(matches)
+                            totalLC.value += 1                            
 
                     line = f.readline()         
                     lineNumber += 1
+
+                if mutex:
+                    mutex.acquire()
+                    outputTable[file] += output
+                    mutex.release()
   
         except FileNotFoundError:
             print(f"Ficheiro '{file}' não encontrado. Verifique o seu input.")
@@ -338,10 +362,10 @@ def matchFinder(loadList, args, word, totalWC, totalLC, mutex=None, queue=None):
         except UnicodeDecodeError as e:
             print(e, file)
 
-    if queue:
-        queue.put(outputTable)
+    after = time.time()
+    # print("HERE: ", after-before)
 
-    assert 1==1
+
 
 def removeDuplicates(inputList):
     """
@@ -371,7 +395,7 @@ def lineCounter(file, pos):
 
 def realtimeFeedback(sig, NULL):
 
-    global queue
+    global manager
     global totalLC
     global totalWC
     global timeCounter
@@ -387,7 +411,7 @@ async def realtimeFeedbackAlt():
     Esta é uma alternativa utilizando a package "asyncio"
     """
 
-    global queue
+    global manager
     global totalLC
     global totalWC
     global statusReportInterval
