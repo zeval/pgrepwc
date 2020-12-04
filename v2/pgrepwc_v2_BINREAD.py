@@ -23,19 +23,24 @@ if platform.system() == "Windows":
 processTable = None
 totalWC = None
 totalLC = None
+totalFilesProcessed = None
 timeCounter = 0
 statusReportInterval = None
 manager = None
 outputTable = None
+args = None
+
 
 
 
 def main(argv):
     global totalWC
     global totalLC
+    global totalFilesProcessed
     global outputTable
     global statusReportInterval
     global processTable
+    global args
 
 
     try:
@@ -70,6 +75,7 @@ def main(argv):
     # Definição das variáveis de contagem em memória partilhada
     totalWC = Value("i", 0)
     totalLC = Value("i", 0)
+    totalFilesProcessed = Value("i", 0)
 
     if parallelization:
 
@@ -88,9 +94,6 @@ def main(argv):
         #####
 
         bytesPerProcess = ceil(allFilesSize/numberOfProcesses)
-
-        # Definição de lista de processos a executar
-        p = []
 
         # Definição de um mutex para evitar problemas de sincronização / outputs intercalados
         mutex = Lock()
@@ -154,7 +157,7 @@ def main(argv):
 
                     # Caso a última carga do processo anterior tiver a ver com o ficheiro com que se lida atualmente, iremos
                     # então tratar apenas dos bytes após o byte em que o processo anterior terminou (previousProcessLoad.getEnd() + 1).
-                    if previousProcess[-1].getFile() == allFiles[fileIndex]:
+                    if previousProcessLoad.getFile() == allFiles[fileIndex]:
                         
                         # Caso os bytes que o processo anterior está encarregue + bytesToHandle for maior que fileSize,
                         # este processo lidará então com os bytes que faltarem do ficheiro atual, representados por:
@@ -231,8 +234,13 @@ def main(argv):
         processList = list()
 
         for process in processTable:
-            processList.append(Process(target=matchFinder, args=(processTable[process], opts, args[0], totalWC, totalLC, mutex, outputTable)))
+            processList.append(Process(target=matchFinder, args=(processTable[process], opts, args[0], totalWC, totalLC, totalFilesProcessed, mutex, outputTable)))
 
+
+        if statusReportInterval:
+            
+            signal.signal(signal.SIGALRM, realtimeFeedback)
+            signal.setitimer(signal.ITIMER_REAL, 1, 1)
 
         # Execução e espera pela conclusão dos processos filhos 
 
@@ -247,20 +255,6 @@ def main(argv):
             process.join()
 
         after = time.time()
-
-        # print(outputTable)
-
-        if statusReportInterval:
-            if platform.system() == "Windows":
-                # await realtimeFeedbackAlt()
-                pass
-            
-            else: 
-                signal.signal(signal.SIGALRM, realtimeFeedback)
-                signal.setitimer(signal.ITIMER_REAL, 1, 1)
-
-        
-        # print(outputs)
 
 
         assert 1==1
@@ -278,7 +272,7 @@ def main(argv):
             fullLoad.append(Load(file, 0, fileSize))
 
         before = time.time()
-        matchFinder(fullLoad, opts, args[0], totalWC, totalLC, outputTable = outputTable)
+        matchFinder(fullLoad, opts, args[0], totalWC, totalLC, totalFilesProcessed, outputTable = outputTable)
         after = time.time()
 
     
@@ -303,38 +297,39 @@ def main(argv):
         processedOutputTable[file].sort(key=lambda match: (match.getLineNumber()))
     
 
-            
+
     after1 = time.time()
     
     # Uncomment to show output
-    for file in processedOutputTable:
-        for match in processedOutputTable[file]:
-            print(match.getLineContent())
+    # for file in processedOutputTable:
+    #     for match in processedOutputTable[file]:
+    #         print(match.getLineContent())
             
-    print("processing time:", after1 - before1)
+    # print("processing time:", after1 - before1)
 
+
+    print() # Razões estéticas
 
     if parallelization:
-        print(f"PID PAI: {os.getpid()}")
+        print(f"PID PAI: {colorWrite(os.getpid(), 'green')}")
 
     if any("-c" in opt for opt in opts):
-        print(f"Total de ocorrências: {totalWC.value}")
+        print(f"Total de ocorrências: {colorWrite(totalWC.value, 'green')}")
 
     if any("-l" in opt for opt in opts):
-        print(f"Total de linhas: {totalLC.value}")
+        print(f"Total de linhas: {colorWrite(totalLC.value, 'green')}")
     
-    print("Tempo total:", after - before)
-    assert 1==1
+    print("Tempo total:", colorWrite(round(after - before), 'green'), "segundos")
 
 
-def matchFinder(loadList, args, word, totalWC, totalLC, mutex=None, outputTable=None):
+
+def matchFinder(loadList, args, word, totalWC, totalLC, totalFilesProcessed, mutex=None, outputTable=None):
     global processTable
     # Expressão regular responsável por identificar instâncias da palavra isolada
     regex = fr"\b{word}\b"
 
     before = time.time()
 
-    print("I STARTED")
     for load in loadList:
 
         file = load.getFile()
@@ -344,6 +339,8 @@ def matchFinder(loadList, args, word, totalWC, totalLC, mutex=None, outputTable=
         wc = 0
         lc = 0
         pid = os.getpid()
+        fileSize = os.path.getsize(file)
+
 
         # if file not in outputTable:
         #     outputTable[file] = []
@@ -366,8 +363,8 @@ def matchFinder(loadList, args, word, totalWC, totalLC, mutex=None, outputTable=
 
                         # Uso do método re.sub() para substituir todas as instâncias da palavra isolada
                         # por instâncias da mesma em versão colorida
-                        processedLine = re.sub(regex, RED_START + word + COLOR_END, line)
-                        output.append(Match(file, lineNumber, f"{GREEN_START}{lineNumber}{COLOR_END}: {processedLine}", len(matches)))
+                        processedLine = re.sub(regex, colorWrite(word, "red"), line)
+                        output.append(Match(file, lineNumber, f"{colorWrite(lineNumber, 'green')}: {processedLine}", len(matches)))
 
                         # output += f"{GREEN_START}{lineNumber}{COLOR_END}: {processedLine}"
 
@@ -378,10 +375,15 @@ def matchFinder(loadList, args, word, totalWC, totalLC, mutex=None, outputTable=
                             mutex.release()
                         else:
                             totalWC.value += len(matches)
-                            totalLC.value += 1                            
+                            totalLC.value += 1         
 
                     line = str(f.readline(), "utf-8")
                     lineNumber += 1
+
+                if fileSize == load.getEnd():
+                    mutex.acquire()
+                    totalFilesProcessed.value += 1
+                    mutex.release()
 
                 # if mutex:
                 #     mutex.acquire()
@@ -401,7 +403,7 @@ def matchFinder(loadList, args, word, totalWC, totalLC, mutex=None, outputTable=
             print(e, file)
 
     after = time.time()
-    print("HERE: ", after-before)
+    # print("HERE: ", after-before)
 
 
 
@@ -436,12 +438,19 @@ def realtimeFeedback(sig, NULL):
     global manager
     global totalLC
     global totalWC
+    global totalFilesProcessed
     global timeCounter
     global statusReportInterval
+    global args
+
     timeCounter += 1
 
     if timeCounter % statusReportInterval == 0:
-        print(f"Passaram {timeCounter} segundos")
+        os.system("clear")
+        print(f"Passaram {colorWrite(timeCounter, 'green')} segundos")
+        print(f"Encontradas {colorWrite(totalWC.value, 'green')} instâncias de '{colorWrite(args[0], 'red')}' em {colorWrite(totalLC.value, 'green')} linhas.")
+        print(f"{colorWrite(totalFilesProcessed.value, 'green')} ficheiros foram completamente processados.")
+        print()
 
 async def realtimeFeedbackAlt():
     """
@@ -464,6 +473,13 @@ async def realtimeFeedbackAlt():
     
     return
 
+def colorWrite(text, color):
+    if color == "green":
+        return GREEN_START + str(text) + COLOR_END
+    
+    if color == "red":
+        return RED_START + str(text) + COLOR_END
 
 if __name__ == "__main__":
     main(sys.argv[1:])
+
