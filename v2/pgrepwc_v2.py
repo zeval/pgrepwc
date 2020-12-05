@@ -319,9 +319,10 @@ def main(argv):
 
     for opt in opts:
         if opt[0] == "-f":
-            file = opt[1]
+            file = opt[1].strip()
             with open(file, "wb") as f:
-                pickle.dump((processStats, after - before, startDateStamp), f)
+                pickle.dump((dict(processStats), after - before, startDateStamp, opts, args[0]), f)
+
 
     
     # Uncomment to show output
