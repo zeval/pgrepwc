@@ -33,6 +33,7 @@ opts = None
 halt = None
 processedOutputList = None
 allFiles = None
+writeMutex = Lock()
 
 
 def main(argv):
@@ -524,6 +525,7 @@ def realtimeFeedback(sig, NULL):
     global args
     global opts
     global allFiles
+    global writeMutex
 
     timeCounter += 1
 
@@ -548,7 +550,9 @@ def realtimeFeedback(sig, NULL):
         output += ("")
 
         os.system("clear")
+        writeMutex.acquire()
         print(output)
+        writeMutex.release()
 
         
 def haltHandler(sig,NULL):
@@ -557,6 +561,7 @@ def haltHandler(sig,NULL):
     """
     global halt
     global args
+    global writeMutex
 
     word = args[0]
 
@@ -564,7 +569,9 @@ def haltHandler(sig,NULL):
         halt.value = 1
         os.system("clear")
         ctrlC = colorWrite("CTRL+C", 'red')
+        writeMutex.acquire()
         answer = input(f"Carregou em {ctrlC} se parar agora poderão haver instâncias de '{colorWrite(word, 'red')}' não encontradas, deseja mesmo sair? ({colorWrite('Y', 'green')}/{colorWrite('N', 'red')})\n")
+        writeMutex.release()
 
         if answer.lower() == "y":
             print("A terminar em segurança...")
