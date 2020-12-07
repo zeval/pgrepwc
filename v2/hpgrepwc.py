@@ -1,9 +1,7 @@
 import sys
 import os
 import pickle
-import datetime
-from Load import Load
-from Match import Match
+from datetime import timedelta, datetime as dt 
 import time
 import platform
 
@@ -15,8 +13,9 @@ if platform.system() == "Windows":
     os.system('color')
 
 
+
+
 def main(argv):
-    global args
 
     try:
         # Obter nome do ficheiro
@@ -29,14 +28,11 @@ def main(argv):
 
 
     try:
-        os.system("pwd")
         with open(file, "rb") as f:
             data = pickle.load(f)
         
     except FileNotFoundError as e:
         print(f"Ficheiro '{file}' não encontrado. Verifique o seu input.")
-        import traceback;traceback.print_exc()
-        print(os.system("ls"))
         sys.exit(2)
 
     ### Leitura dos dados e envio para stdout 
@@ -48,10 +44,11 @@ def main(argv):
     processData = data[0]
     opts = data[3]
     word = data[4]
+    haltValue = data[5]
 
     output.append(f"\nPalavra a pesquisar: {colorWrite(word, 'red')}")
-    output.append(f"Início da execução: {colorWrite(data[2], 'green')}")
-    output.append(f"Duração da execução: {colorWrite(data[1], 'green')}")
+    output.append(f"Início da execução: {colorWrite(dt.strftime(data[2], '%d/%m/%Y, %H:%M:%S.%f'), 'green')}")
+    output.append(f"Duração da execução: {colorWrite(timedelta(seconds = data[1]), 'green')}")
 
     sortedProcessData = dict()
 
@@ -63,11 +60,15 @@ def main(argv):
                 sortedProcessData[process][loadData[0].getFile()] = []
             sortedProcessData[process][loadData[0].getFile()].append(loadData)
 
-    # for process in sortedProcessData:
-    #     print(sortedProcessData[process].keys())
+    files = set([processedFile for processedFile in getNested(sortedProcessData, process) for process in sortedProcessData])
+    files = [colorWrite(argFile, 'green') for argFile in files]
 
+    output.append(f"Ficheiros em argumento: " + ",\n                        ".join(files))
 
-    # print(getNested(sortedProcessData, 2307))
+    fileSizes = {}
+    totalProcessed = 0
+    totalLC = 0
+    totalWC = 0
 
     for process in sortedProcessData:
         output.append(f"\nProcesso: {colorWrite(process, 'green')}")
@@ -85,29 +86,55 @@ def main(argv):
             searchSum = sum([loadData[0].getBytesToHandle() for loadData in fileData])
             searchPercentage = str(round((searchSum/fileSize)*100)) + "%"
 
+            if file not in fileSizes:
+                fileSizes[file] = fileSize
+            totalProcessed += searchSum
+
             allLines = []
-            totalWC = 0
+            fileWC = 0
             for loadData in fileData:
                 for match in loadData[3]:
                     allLines.append(match.getLineNumber())
-                    totalWC += match.getAmount()
+                    fileWC += match.getAmount()
                     
 
-            totalLC = len(set(allLines))
+            fileLC = len(set(allLines))
+
+            totalWC += fileWC
+            totalLC += fileLC
             
 
 
             # print(getNested(sortedProcessData, process, file))
-            output.append(f"        Tempo de pesquisa: {colorWrite(timeSum, 'green')}")
+            output.append(f"        Tempo de pesquisa: {colorWrite(timedelta(seconds= timeSum), 'green')}")
             output.append(f"        Dimensão do ficheiro: {colorWrite(fileSize, 'green')} bytes")
             output.append(f"        Dimensão processada: {colorWrite(searchSum, 'green')} bytes ({colorWrite(searchPercentage, 'green')})")
 
             if any("-c" in opt for opt in opts):
-                output.append(f"        Total de ocorrências: {colorWrite(totalWC, 'green')}")
+                output.append(f"        Total de ocorrências: {colorWrite(fileWC, 'green')}")
 
             if any("-l" in opt for opt in opts):
-                output.append(f"        Total de linhas com ocorrências: {colorWrite(totalLC, 'green')}")
+                output.append(f"        Total de linhas com ocorrências: {colorWrite(fileLC, 'green')}")
 
+    output.append("")
+
+    totalSize = sum([fileSizes[file] for file in fileSizes])
+    totalPercentage = round((totalProcessed/totalSize)*100)
+    totalPercentageString = colorWrite(str(totalPercentage) + "%", 'green') if totalPercentage == 100 else colorWrite(str(totalPercentage) +"%", 'red')
+
+    if any("-c" in opt for opt in opts):
+        output.append(f"Total de ocorrências: {colorWrite(totalWC, 'green')}")
+
+    if any("-l" in opt for opt in opts):
+        output.append(f"Total de linhas com ocorrências: {colorWrite(totalLC, 'green')}")
+    
+    output.append(f"Total de bytes: {colorWrite(totalSize, 'green')}")
+    output.append(f"Total de bytes processado: {colorWrite(totalProcessed, 'green')} ({totalPercentageString})")
+
+    if haltValue == 2:
+        output.append(colorWrite("[PARAGEM FORÇADA]", "red"))
+
+    output.append("")
 
     for line in output:
         print(line)
@@ -129,6 +156,58 @@ def getNested(data, *args):
         if element:
             value = data.get(element)
             return value if len(args) == 1 else getNested(value, *args[1:])
+
+
+### CLASSES (O enunciado explicitamente limita a existência de ficheiros ".py"
+#   a um máximo de 2. Desta forma, incluímos as classes necessárias ao funcionamento
+#   do programa no ficheiro pgrepwc e no ficheiro hpgrepwc separadamente para que estes
+#   possam funcionar indepentendemente um do outro.)
+
+
+class Load:
+    """
+    TODO: Comentar
+    """
+    def __init__(self, file, offset, bytesToHandle):
+        self._file = file
+        self._offset = offset
+        self._bytesToHandle = bytesToHandle
+        self._end = offset + bytesToHandle - 1
+
+    def getFile(self):
+        return self._file
+
+    def getOffset(self):
+        return self._offset
+    
+    def getBytesToHandle(self):
+        return self._bytesToHandle
+
+    def getEnd(self):
+        return self._end
+
+class Match:
+    """
+    TODO: Comentar
+    """
+    def __init__(self, file, lineNumber, lineContent, amount):
+        self._lineNumber = lineNumber
+        self._lineContent = lineContent
+        self._file = file
+        self._amount = amount
+
+    def getLineNumber(self):
+        return self._lineNumber
+
+    def getLineContent(self):
+        return self._lineContent
+    
+    def getFile(self):
+        return self._file
+
+    def getAmount(self):
+        return self._amount
+
 
 if __name__ == "__main__":
     main(sys.argv[1:])
