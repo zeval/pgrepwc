@@ -12,7 +12,24 @@ COLOR_END = '\033[0m'
 if platform.system() == "Windows":
     os.system('color')
 
+# Constantes data
 
+START_DATE_STAMP = 2
+DURATION = 1
+PROCESS_DATA = 0
+OPTS = 3
+WORD = 4
+HALT_VALUE = 5
+
+# Constantes loadData
+
+LOAD = 0
+TIME_TAKEN = 2
+LOAD_MATCHES = 3
+
+# Constantes fileData
+
+SIZE = 1
 
 
 def main(argv):
@@ -39,16 +56,16 @@ def main(argv):
     
     output = []
 
-    startDateStamp = data[2]
-    duration = data[1]
-    processData = data[0]
-    opts = data[3]
-    word = data[4]
-    haltValue = data[5]
+    startDateStamp = data[START_DATE_STAMP]
+    duration = data[DURATION]
+    processData = data[PROCESS_DATA]
+    opts = data[OPTS]
+    word = data[WORD]
+    haltValue = data[HALT_VALUE]
 
     output.append(f"\nPalavra a pesquisar: {colorWrite(word, 'red')}")
-    output.append(f"Início da execução: {colorWrite(dt.strftime(data[2], '%d/%m/%Y, %H:%M:%S.%f'), 'green')}")
-    output.append(f"Duração da execução: {colorWrite(timedelta(seconds = data[1]), 'green')}")
+    output.append(f"Início da execução: {colorWrite(dt.strftime(startDateStamp, '%d/%m/%Y, %H:%M:%S.%f'), 'green')}")
+    output.append(f"Duração da execução: {colorWrite(timedelta(seconds = duration), 'green')}")
 
     sortedProcessData = dict()
 
@@ -56,9 +73,9 @@ def main(argv):
         for loadData in processData[process]:
             if process not in sortedProcessData:
                 sortedProcessData[process] = dict()
-            if loadData[0].getFile() not in sortedProcessData[process]:
-                sortedProcessData[process][loadData[0].getFile()] = []
-            sortedProcessData[process][loadData[0].getFile()].append(loadData)
+            if loadData[LOAD].getFile() not in sortedProcessData[process]:
+                sortedProcessData[process][loadData[LOAD].getFile()] = []
+            sortedProcessData[process][loadData[LOAD].getFile()].append(loadData)
 
     files = set([processedFile for processedFile in getNested(sortedProcessData, process) for process in sortedProcessData])
     files = [colorWrite(argFile, 'green') for argFile in files]
@@ -76,15 +93,12 @@ def main(argv):
         
         for file in files:
             fileData = getNested(sortedProcessData, process, file)
-            # print(fileData)
-
-            assert 1==1
 
             output.append(f"    Ficheiro: {colorWrite(file, 'green')}")
-            timeSum = sum([loadData[2] for loadData in fileData])
-            fileSize = fileData[0][1]
-            searchSum = sum([loadData[0].getBytesToHandle() for loadData in fileData])
-            searchPercentage = str(round((searchSum/fileSize)*100)) + "%"
+            timeSum = sum([loadData[TIME_TAKEN] for loadData in fileData])
+            fileSize = fileData[0][SIZE]
+            searchSum = sum([loadData[LOAD].getBytesToHandle() for loadData in fileData])
+            searchPercentage = (str(round((searchSum/fileSize)*100, 1)) + "%").replace(".0", "")
 
             if file not in fileSizes:
                 fileSizes[file] = fileSize
@@ -92,8 +106,9 @@ def main(argv):
 
             allLines = []
             fileWC = 0
+            
             for loadData in fileData:
-                for match in loadData[3]:
+                for match in loadData[LOAD_MATCHES]:
                     allLines.append(match.getLineNumber())
                     fileWC += match.getAmount()
                     
@@ -119,8 +134,8 @@ def main(argv):
     output.append("")
 
     totalSize = sum([fileSizes[file] for file in fileSizes])
-    totalPercentage = round((totalProcessed/totalSize)*100)
-    totalPercentageString = colorWrite(str(totalPercentage) + "%", 'green') if totalPercentage == 100 else colorWrite(str(totalPercentage) +"%", 'red')
+    totalPercentage = str(round((totalProcessed/totalSize)*100, 1)).replace(".0", "")
+    totalPercentageString = colorWrite(str(totalPercentage) + "%", 'green') if totalPercentage == "100" else colorWrite(str(totalPercentage) +"%", 'red')
 
     if any("-c" in opt for opt in opts):
         output.append(f"Total de ocorrências: {colorWrite(totalWC, 'green')}")
@@ -211,4 +226,3 @@ class Match:
 
 if __name__ == "__main__":
     main(sys.argv[1:])
-
