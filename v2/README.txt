@@ -1,4 +1,4 @@
-Grupo 22 - Novembro/2020
+Grupo 22 - Dezembro/2020
 
 55373 - José Almeida
 55371 - Augusto Gouveia
@@ -6,23 +6,49 @@ Grupo 22 - Novembro/2020
 
 Funcionalidades:
 
-• Suporta duas versões de paralelismo: multiprocessing (pgrepwc.py) e multithreading (pgrepwc_threads.py).
+[pgrepwc.py]: 
 
-		- O uso do pacote multiprocessing neste projeto permite-nos certificar que este funciona de maneira igualmente eficiente em Linux e Windows (algo impossibilitado pelo uso de os.fork(), visto que este não funciona em Windows).
+• Utilização: pgrepwc [-c|-l] [-p n] [-a s] [-f file] [-h] palavra <ficheiros>
 
-• Realçamento dos números das linhas a verde e das correspondências a vermelho, em ambas versões do programa (disponível em ambos Linux e Windows).
+• Opção "-h" que permite esconder o output.
 
-• Uso de mecanismos de exclusão mútua (mutex lock) para assegurar que não se dão problemas de sincronização (e.g. escrita simultânea na mesma variável por parte de processos/threads diferentes) e que a exposição dos resultados por parte dos processos/threads se dá de maneira intercalada.
+• Uso de mecanismos de memória partilhada para comunicar resultados de pesquisas/contagens ao
+processo pai por parte dos processos-filho.
 
-• Uso de expressões regulares para encontrar correspondências exatas da palavra especi-
-ficada em situações que esta esteja isolada.
+• Suporta paralelismo: multiprocessing.
 
-• Estrutura robusta que permite aceder aos ficheiros-alvo sem ter que os carregar diretamente para a memória (especialmente útil para ficheiros de maiores dimensões).
+• Realçamento dos números das linhas a verde e das correspondências a vermelho.
 
-• Programação defensiva que permite que o programa não falhe quando um dos ficheiros referidos não é encontrado. Inclui também prevenção de repetição de procura em ficheiros, descartando ficheiros repetidos que possam ter sido introduzidos pelo utilizador.
+• Uso de mecanismos de exclusão mútua (mutex lock) para assegurar que não se dão problemas de
+sincronização (ex. escrita simultânea na mesma variável por parte de processos/threads diferentes)
+e que a exposição dos resultados por parte dos processos/threads se dá de maneira intercalada.
 
-• [pgrepwc.py] -> Uso de mecanismos de memória partilhada para comunicar resultados de pesquisas/contagens ao processo pai por parte dos processos-filho.
+• Uso de expressões regulares para encontrar correspondências exatas da palavra especificada em
+situações que esta se encontre isolada.
+
+• Estrutura robusta que permite aceder aos ficheiros-alvo sem ter que os carregar diretamente para
+a memória (especialmente útil para ficheiros de maiores dimensões).
+
+• Programação defensiva que permite que o programa não falhe quando um dos ficheiros referidos não
+é encontrado. Inclui também prevenção de repetição de procura em ficheiros, descartando ficheiros
+repetidos que possam ter sido introduzidos pelo utilizador.
 
 • Leitura de nomes dos ficheiros-alvo através de stdin ou como argumento.
+
+• Processamento seguro do sinal SIGINT: ao ser recebido o sinal SIGINT, é necessária confirmação
+para que o programa termine o processamento, de modo a evitar acidentes. Ao ser recebida
+confirmação, a paragem de processamento é efectuada de maneira segura e não abrupta, assegurando-se
+que todos os dados recolhidos até ao momento são corretamente apresentados e possivelmente
+guardados (opção "-f").
+
+• Código detalhadamente documentado.
+
+[hpgrepwc.py]: 
+
+• Utilização: hpgrepwc <ficheiro>
+
+• Realçamento de dados considerados mais importantes a verde, há excepção de quando o total de
+bytes processado não corresponde a 100% (neste caso a percentagem do total de bytes processado
+apresenta-se realçada a vermelho).
 
 • Código detalhadamente documentado.

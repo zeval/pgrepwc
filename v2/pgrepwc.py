@@ -2,7 +2,6 @@ import sys
 import getopt
 import os
 import re
-import platform
 import pickle
 from math import ceil
 from multiprocessing import Value, Process, Lock, Manager
@@ -10,14 +9,12 @@ import datetime
 import signal
 import time
 
-# Constante/Definição de cor
+# Constante/Definição de cor.
 RED_START = '\033[91m'
 GREEN_START = '\033[92m'
 COLOR_END = '\033[0m'
-if platform.system() == "Windows":
-    os.system('color')
 
-# Definição de variáveis globais
+# Definição de variáveis globais.
 
 processTable = None
 totalWC = None
@@ -33,6 +30,10 @@ opts = None
 halt = None
 processedOutputList = None
 allFiles = None
+
+# Lock utilizada para prevenir possíveis erros
+# quando várias funções tentam escrever para stdout em
+# simultâneo.
 writeMutex = Lock()
 
 
@@ -52,47 +53,60 @@ def main(argv):
 
     processStats = None
 
-    # Definição do tempo de início e datetime de início
+    # Definição do tempo de início e datetime de início.
     startTimeStamp = time.time()
     startDateStamp = datetime.datetime.now()
 
 
     try:
-        # Obter argumentos, opções
+        # Obter argumentos e opções.
         opts, args = getopt.getopt(argv, "clp:a:f:h")
 
     except getopt.GetoptError:
-        # Mensagem de ajuda caso o comando seja malformado
+        # Mensagem de ajuda caso o comando seja malformado.
         print("Utilização: pgrepwc [-c|-l] [-p n] [-a s] [-f file] [-h] palavra <ficheiros>")
         sys.exit(2)
 
-    # Por omissão, todas as pesquisas/contagens são feitas no processo pai, pelo que não se dá paralelismo
+    # Por omissão, todas as pesquisas/contagens são feitas no processo pai, pelo que não se dá paralelismo.
     numberOfProcesses = 1
     parallelization = False
 
-    if len(args) == 1:  # Caso apenas seja dada a palavra, e não os nomes dos ficheiros
+     # Caso apenas seja dada a palavra, e não os nomes dos ficheiros.
+    if len(args) == 1: 
         print("Introduza os nomes dos ficheiros a pesquisar, numa linha, separados por espaços:")
-        allFiles = removeDuplicates(input().split())  # Evitar pesquisar nos mesmos ficheiros várias vezes
-        print()  # Razões Estéticas
+
+        # Evitar pesquisar nos mesmos ficheiros várias vezes.
+        allFiles = removeDuplicates(input().split())  
+
+        # Razões Estéticas.
+        print()  
     else:
-        allFiles = removeDuplicates(args[1:])  # Evitar pesquisar nos mesmos ficheiros várias vezes
+
+        # Evitar pesquisar nos mesmos ficheiros várias vezes.
+        allFiles = removeDuplicates(args[1:])  
 
     try:
         for opt in opts:
             if opt[0] == "-p":
+
                 numberOfProcesses = int(opt[1])
-                parallelization = True  # Ativar paralelismo caso a opção "-p n" seja utilizada
-                if numberOfProcesses == 0:  # Evitar erros se for pedido "-p 0", desligando o paralelismo
+                # Ativar paralelismo caso a opção "-p n" seja utilizada.
+                parallelization = True  
+
+                # Evitar erros se for pedido "-p 0", desligando o paralelismo.
+                if numberOfProcesses == 0:  
                     parallelization = False
+
             if opt[0] == "-a":
+
                 statusReportInterval = int(opt[1])
     except:
-        # Mensagem de ajuda caso o comando seja malformado
+        # Mensagem de ajuda caso o comando seja malformado.
         print("Utilização: pgrepwc [-c|-l] [-p n] [-a s] [-f file] [-h] palavra <ficheiros>")
         sys.exit(2)
 
 
-    # Definição das variáveis de contagem em memória partilhada
+    # Definição das variáveis de contagem em memória partilhada.
     totalWC = Value("i", 0)
     totalLC = Value("i", 0)
     totalFilesProcessed = Value("i", 0)
@@ -108,10 +122,10 @@ def main(argv):
         outputList = manager.list()
         processStats = manager.dict()
         
-        # Estrutura que irá conter a atribuição de carga a cada processo
+        # Estrutura que irá conter a atribuição de carga a cada processo.
         processTable = dict()
 
-        # Cálculo do tamanho agregado de todos os ficheiros
+        # Cálculo do tamanho agregado de todos os ficheiros.
         allFilesSize = 0
         for file in allFiles:
             allFilesSize += os.path.getsize(file)
@@ -119,7 +133,7 @@ def main(argv):
         # Cálculo da quantidade média de bytes por processo
         bytesPerProcess = ceil(allFilesSize/numberOfProcesses)
 
-        # Definição de uma mutual exclusion lock para evitar problemas de sincronização
+        # Definição de uma mutual exclusion lock para evitar problemas de sincronização.
         mutex = Lock()
 
 
@@ -150,7 +164,7 @@ def main(argv):
                     bytesToHandle = bytesPerProcess
 
 
-                # Obter tamanho do ficheiro com que se está a lidar
+                # Obter tamanho do ficheiro com que se está a lidar.
                 fileSize = os.path.getsize(allFiles[fileIndex])
                 
                 # Caso este seja o primeiro processo (ou seja: previousProcess == None):
@@ -172,7 +186,7 @@ def main(argv):
                 # Caso contrário (se este não for o primeiro processo):
                 else:
                     
-                    # Referencia-se a carga mais recente do último processo (o último objeto Load do processo anterior)
+                    # Referencia-se a carga mais recente do último processo (o último objeto Load do processo anterior).
                     previousProcessLoad = previousProcess[-1]
 
                     # Caso a última carga do processo anterior tiver a ver com o ficheiro com que se lida atualmente, iremos
@@ -247,23 +261,23 @@ def main(argv):
         ###################################################################################################################
 
 
-        # Criação de objetos Process e dada a carga atribuída
+        # Criação de objetos Process e dada a carga atribuída.
         processList = list()
 
         for process in processTable:
             processList.append(Process(target=matchFinder, args=(processTable[process], outputList, processStats, mutex)))
 
         # Caso o utilizador tenha incluido a opção "-a", atribuir função realtimeFeedback ao sinal SIGALRM
-        # e iniciar um temporizador que itera a cada segundo
+        # e iniciar um temporizador que itera a cada segundo.
         if statusReportInterval:
             
             signal.signal(signal.SIGALRM, realtimeFeedback)
             signal.setitimer(signal.ITIMER_REAL, 1, 1)
 
-        # Atribuição da função haltHandler ao sinal SIGINT
+        # Atribuição da função haltHandler ao sinal SIGINT.
         signal.signal(signal.SIGINT, haltHandler)
 
-        # Execução e espera pela conclusão dos processos filhos e início da medição do tempo de processamento
+        # Execução e espera pela conclusão dos processos filhos e início da medição do tempo de processamento.
         before = time.time()
 
         for process in processList:
@@ -279,12 +293,12 @@ def main(argv):
         after = time.time()
 
         
-    # Caso o paralelismo esteja desligado, todo o trabalho é feito pelo processo pai
+    # Caso o paralelismo esteja desligado, todo o trabalho é feito pelo processo pai.
     else: 
 
         # Redefinição de estruturas necessários ao funcionamento do processo:
-        # • fullLoad: lista que incluirá os objetos Load referentes à carga (1 por ficheiro, neste caso)
-        # • Outros: estruturas onde o processo guardará os seus resultados
+        # • fullLoad: lista que incluirá os objetos Load referentes à carga (1 por ficheiro, neste caso);
+        # • Outros: estruturas onde o processo guardará os seus resultados.
         fullLoad = list()
         outputList = list()
         processStats = dict()
@@ -303,10 +317,10 @@ def main(argv):
             signal.signal(signal.SIGALRM, realtimeFeedback)
             signal.setitimer(signal.ITIMER_REAL, 1, 1)
         
-        # Atribuição da função haltHandler ao sinal SIGINT
+        # Atribuição da função haltHandler ao sinal SIGINT.
         signal.signal(signal.SIGINT, haltHandler)
 
-        # Execução e espera pela conclusão da função matchFinder e início da medição do tempo de processamento
+        # Execução e espera pela conclusão da função matchFinder e início da medição do tempo de processamento.
         before = time.time()
         
         matchFinder(fullLoad, outputList = outputList, processStats = processStats)
@@ -325,12 +339,12 @@ def main(argv):
         processedOutputList[match.getFile()].append(match)
 
     # Ordenação ascendente dos objetos Match por número de linha, para que o output
-    # seja imprimido de forma ordenada  
+    # seja imprimido de forma ordenada.
     for file in processedOutputList:
         processedOutputList[file].sort(key=lambda match: (match.getLineNumber()))
 
 
-    # Guardar ficheiro de histórico
+    # Guardar ficheiro de histórico.
     for opt in opts:
         if opt[0] == "-f":
             file = opt[1].strip()
@@ -338,20 +352,19 @@ def main(argv):
                 pickle.dump((dict(processStats), after - before, startDateStamp, opts, args[0], int(halt.value)), f)
 
 
+    # Desativa o feedback em tempo real.
+    signal.alarm(0)
+
     
-    # Esconder output se -h for incluido nas opções
+    # Esconder output se -h for incluido nas opções.
     os.system("clear")
     if not any("-h" in opt for opt in opts):
         for file in processedOutputList:
             for match in processedOutputList[file]:
                 print(match.getLineContent())
             
-            
-    # Desativa o feedback em tempo real
-    signal.alarm(0)
 
-
-    print() # Razões estéticas
+    print() # Razões estéticas.
 
 
     # Imprimir output consoante a presença de opções nos argumentos do utilizador:
@@ -397,23 +410,31 @@ def matchFinder(loadList, outputList, processStats, mutex=None):
 
     word = args[0]
 
+    # Os processos-filhos devem ignorar o sinal SIGINT, este deve ser apenas recebido e processado
+    # pelo processo-pai. 
     if mutex:
         signal.signal(signal.SIGINT, signal.SIG_IGN)
 
-    # Expressão regular responsável por identificar instâncias da palavra isolada
+    # Expressão regular responsável por identificar instâncias da palavra isolada.
     regex = fr"\b{word}\b"
 
     processInfo = []
 
     for load in loadList:
 
+
+        # Caso halt.value == 2 (caso o utilizador force a paragem com SIGINT + confirmação), sair do ciclo
+        # que itera sobre objetos Load.
         if halt.value == 2:
             break
-
+        
+        # Estrutura para compilação de objetos Match referentes ao atual objeto Load.
         loadMatches = []
 
+        # Início da medição do tempo de processamento do objeto Load atual.
         beforeLoad = time.time()
 
+        # Obtenção de dados do objeto Load.
         file = load.getFile()
         offset = load.getOffset()
         loadSize = load.getBytesToHandle()
@@ -421,28 +442,36 @@ def matchFinder(loadList, outputList, processStats, mutex=None):
         pid = os.getpid()
         fileSize = os.path.getsize(file)
         
+        # Obtenção da posição inicial (em linhas).
         firstLine = lineCounter(file, offset)
 
         try:
-            with open(file, "rb") as f: #encoding="ISO-8859-1"
+            with open(file, "rb") as f:
                 lineNumber = firstLine
+
+                # Translação do ponteiro para a posição inicial especificada no objeto Load.
                 f.seek(offset)
 
                 line = str(f.readline(), "utf-8")
                 
-                output = []
+                # Estrutura que irá albergar todos os objetos match.
+                loadMatches = []
 
                 while line and f.tell() <= load.getEnd():
 
+                    # Uso de re.findall() para encontrar todas as matches da palavra na linha atual.
                     matches = re.findall(regex, line)
 
                     if matches:
 
                         # Uso do método re.sub() para substituir todas as instâncias da palavra isolada
-                        # por instâncias da mesma em versão colorida
+                        # por instâncias da mesma em versão colorida.
                         processedLine = re.sub(regex, colorWrite(word, "red"), line)
-                        output.append(Match(file, lineNumber, f"{colorWrite(lineNumber, 'green')}: {processedLine}", len(matches)))
+                        loadMatches.append(Match(file, lineNumber, f"{colorWrite(lineNumber, 'green')}: {processedLine}", len(matches)))
 
+                        # Incrementação nas variáveis globais relativas à contagem do total de correspondências
+                        # e total de linhas com correspondências, respetivamente, com uso de mutex (no caso de 
+                        # haver paralelismo) para prevenir erros de sincronização.
                         if mutex:
                             mutex.acquire()
                             totalWC.value += len(matches)
@@ -452,10 +481,12 @@ def matchFinder(loadList, outputList, processStats, mutex=None):
                             totalWC.value += len(matches)
                             totalLC.value += 1
 
+                    # Incrementação do número de linha e passagem à próxima linha.
                     line = str(f.readline(), "utf-8")
                     lineNumber += 1
 
-
+                # Caso o objeto Load atual seja referente à última secção de um ficheiro,
+                # incrementar a variável global totalFilesProcessed.
                 if fileSize == load.getEnd():
                     if mutex:
                         mutex.acquire()
@@ -464,22 +495,28 @@ def matchFinder(loadList, outputList, processStats, mutex=None):
                     else:
                         totalFilesProcessed.value += 1
 
-                for match in output:
+                # Adicionar resultados do objeto Load atual à lista que alberga todos
+                # os resultados do processo atual.
+                for match in loadMatches:
                     outputList.append(match)
-                    loadMatches.append(match)
-            
-  
-        except FileNotFoundError:
-            print(f"Ficheiro '{file}' não encontrado. Verifique o seu input.")
-
+        
+        
         except UnicodeDecodeError as e:
             print(e, f"\nFicheiro '{file}' contém caracteres ilegíveis.")
+  
+        except:
+            print(f"Ficheiro '{file}' não encontrado ou inválido. Verifique o seu input.")
+
 
         afterLoad = time.time()
 
+        # Adicionar dados referentes ao objeto Load atual à estrutura que alberga 
+        # informação sobre o processamento dos vários objetos Load referentes
+        # a este processo.
         processInfo.append((load, fileSize, afterLoad-beforeLoad, loadMatches))
 
-
+    # Adicionar resultados do processo atual à estrutura que alberga 
+    # os resultados de todos os processos.
     processStats[os.getpid()] = processInfo
 
 
@@ -494,7 +531,10 @@ def removeDuplicates(inputList):
 
 def lineCounter(file, pos):
     """
-    TODO: Comentar
+    Cálcula a posição em linhas num ficheiro quando dada posição do ponteiro
+    em bytes.
+    Requires: pos é um inteiro, numero de bytes referente à posição do ponteiro.
+    Ensures: count, número da linha que inclui o byte pos.
     """
     # Abrindo o ficheiro como binário é várias vezes mais rápido e eficiente
     # do que abrir como ficheiro de texto.
@@ -512,7 +552,6 @@ def lineCounter(file, pos):
 def realtimeFeedback(sig, NULL):
     """
     Função responsável por apresentar o estado do programa.
-    TODO: Comentar
     """
     global manager
     global totalLC
@@ -538,10 +577,12 @@ def realtimeFeedback(sig, NULL):
 
         output += (f"Passaram {colorWrite(currentTime, 'green')} microsegundos")
 
+
+        # Imprimir output consoante a presença de opções nos argumentos do utilizador.
         if any("-l" in opt for opt in opts):
             output += (f"\nEncontradas instâncias de '{colorWrite(args[0], 'red')}' em {colorWrite(totalLC.value, 'green')} linhas")
 
-        elif any("-c" in opt for opt in opts):
+        if any("-c" in opt for opt in opts):
             output += (f"\nEncontradas {colorWrite(totalWC.value, 'green')} instâncias de '{colorWrite(args[0], 'red')}'")
             
         fileProgress = colorWrite(str(totalFilesProcessed.value) + "/" + str(len(allFiles)), 'green')
@@ -558,6 +599,7 @@ def realtimeFeedback(sig, NULL):
 def haltHandler(sig,NULL):
     """
     Função responsável por lidar com a interrupção do programa.
+    (Acionada quando é detetado o sinal SIGINT).
     """
     global halt
     global args
@@ -581,6 +623,12 @@ def haltHandler(sig,NULL):
 
 
 def colorWrite(text, color):
+    """
+    Devolve o texto recebido na cor especificada.
+    Requires: text é um string e color é 'green' ou 'red'.
+    Ensures: text rodeado pelos códigos de cor referentes à 
+    cor especificada.
+    """
     if color == "green":
         return GREEN_START + str(text) + COLOR_END
     
@@ -591,11 +639,11 @@ def colorWrite(text, color):
 ### CLASSES (O enunciado explicitamente limita a existência de ficheiros ".py"
 #   a um máximo de 2. Desta forma, incluímos as classes necessárias ao funcionamento
 #   do programa no ficheiro pgrepwc e no ficheiro hpgrepwc separadamente para que estes
-#   possam funcionar indepentendemente um do outro.)
+#   possam funcionar indepentendemente um do outro).
 
 class Load:
     """
-    A classe Load TODO
+    Alberga dados sobre carga referente a um processo.
     """
     def __init__(self, file, offset, bytesToHandle):
         self._file = file
@@ -629,7 +677,7 @@ class Load:
 
 class Match:
     """
-    A classe Match TODO
+    Alberga dados sobre uma linha que contenha ocorrências de uma palavra.
     """
     def __init__(self, file, lineNumber, lineContent, amount):
         self._lineNumber = lineNumber
