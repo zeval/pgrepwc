@@ -1,3 +1,9 @@
+# Grupo 22 - Dezembro/2020
+#
+# 55373 - José Almeida
+# 55371 - Augusto Gouveia
+# 54975 - Miguel Lages
+
 import sys
 import os
 import pickle
